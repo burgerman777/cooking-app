@@ -876,7 +876,7 @@
   <div id="admin-recipe-list"></div>
   <button class="add-btn" onclick="openRecipeEditor(null)">+ 添加新菜谱</button>
   <p style="text-align:center; color:var(--text-muted); font-size:12px; margin-top:8px; margin-bottom:20px;">
-    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720e</span>
+    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720f</span>
   </p>
 </div>
 
@@ -1958,8 +1958,8 @@ let timerRemaining = 0;
 let timerInterval = null;
 
 function goPrep() {
-  stopTimer();
-  stopSpeak();
+  try { stopTimer(); } catch(e) {}
+  try { stopSpeak(); } catch(e) {}
   goScreen('prep');
 }
 
@@ -2355,9 +2355,13 @@ function toggleVoice() {
 
 function stopSpeak() {
   // 无条件取消所有待播报内容，防止上一步没念完继续念
-  speechSynthesis.cancel();
+  try {
+    if (typeof speechSynthesis !== 'undefined') {
+      speechSynthesis.cancel();
+    }
+  } catch(e) {}
   if (currentUtterance) {
-    currentUtterance.onend = null;
+    try { currentUtterance.onend = null; } catch(e) {}
     currentUtterance = null;
   }
 }
