@@ -1,0 +1,18 @@
+{
+  "name": "掌厨 - AI 做菜陪伴",
+  "short_name": "掌厨",
+  "description": "精细到秒的陪伴式做菜指导，AI 全程陪你做菜",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fafaf9",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

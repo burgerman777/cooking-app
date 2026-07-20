@@ -1,0 +1,3515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>掌厨 - AI 做菜陪伴</title>
+<style>
+  :root {
+    --orange: #f97316;
+    --orange-light: #fff7ed;
+    --orange-dark: #ea580c;
+    --bg: #fafaf9;
+    --card: #ffffff;
+    --text: #1c1917;
+    --text-muted: #78716c;
+    --border: #e7e5e4;
+    --green: #22c55e;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: 80px;
+  }
+
+  /* ===== 屏幕切换 ===== */
+  .screen { display: none; padding: 20px 16px 100px; }
+  .screen.active { display: block; animation: fadeIn 0.25s ease; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ===== 顶部栏 ===== */
+  .header {
+    padding: 16px 16px 0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo { font-size: 20px; font-weight: 700; color: var(--orange); display: flex; align-items: center; gap: 6px; }
+  .logo-icon { font-size: 26px; }
+
+  .admin-entry {
+    font-size: 20px; background: none; border: none; cursor: pointer;
+    padding: 6px; border-radius: 8px; opacity: 0.5; transition: opacity 0.2s;
+  }
+  .admin-entry:hover { opacity: 1; }
+
+  /* ===== 首页 ===== */
+  .hero { text-align: center; padding: 24px 0 8px; }
+  .hero h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .hero p { color: var(--text-muted); font-size: 14px; }
+
+  .recipe-card {
+    background: var(--card); border-radius: 16px; padding: 18px; margin-bottom: 12px;
+    box-shadow: var(--shadow); display: flex; align-items: center; gap: 14px;
+    cursor: pointer; transition: all 0.15s; border: 2px solid transparent;
+  }
+  .recipe-card:active { transform: scale(0.985); border-color: var(--orange); }
+  .recipe-emoji { font-size: 44px; width: 60px; text-align: center; flex-shrink: 0; }
+  .recipe-info { flex: 1; min-width: 0; }
+  .recipe-name { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+  .recipe-meta { font-size: 12px; color: var(--text-muted); display: flex; gap: 12px; }
+  .badge {
+    background: #fef3c7; color: #d97706; font-size: 11px;
+    padding: 2px 8px; border-radius: 10px; font-weight: 500;
+  }
+
+  /* ===== 排序栏 / 标签栏 ===== */
+  .scroll-row {
+    display: flex; align-items: center; position: relative;
+  }
+  .scroll-arrow {
+    flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%;
+    border: 1.5px solid var(--border); background: var(--card);
+    font-size: 12px; cursor: pointer; color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    user-select: none; transition: all 0.12s;
+  }
+  .scroll-arrow:active { background: var(--orange); color: #fff; border-color: var(--orange); }
+  .scroll-arrow:disabled { opacity: 0.25; cursor: default; }
+  .sort-bar {
+    display: flex; gap: 6px; padding: 0 0 14px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; scroll-behavior: smooth;
+  }
+  .sort-bar::-webkit-scrollbar { display: none; }
+  .sort-pill {
+    flex-shrink: 0; padding: 5px 13px; border-radius: 16px;
+    border: 1.5px solid var(--border); background: var(--card);
+    font-size: 12px; cursor: pointer; color: var(--text-muted);
+    transition: all 0.15s; font-weight: 500; user-select: none;
+  }
+  .sort-pill.active { background: var(--orange); color: #fff; border-color: var(--orange); }
+
+  /* ===== 排序箭头 ===== */
+  .reorder-btns {
+    display: flex; flex-direction: column; gap: 2px; flex-shrink: 0;
+  }
+  .reorder-arrow {
+    width: 26px; height: 22px; border: none; background: #f5f5f4;
+    border-radius: 4px; cursor: pointer; font-size: 10px; line-height: 1;
+    color: var(--text-muted); display: flex; align-items: center; justify-content: center;
+  }
+  .reorder-arrow:active { background: var(--orange); color: #fff; }
+  .reorder-arrow:disabled { opacity: 0.15; cursor: not-allowed; }
+
+  /* ===== 推荐徽章 ===== */
+  .rec-badge {
+    display: inline-block; background: linear-gradient(135deg, #f59e0b, #ea580c);
+    color: #fff; font-size: 10px; padding: 2px 7px; border-radius: 10px;
+    font-weight: 600; flex-shrink: 0; margin-left: 4px;
+  }
+  .avg-rating {
+    display: inline-flex; align-items: center; gap: 1px;
+    font-size: 11px; color: #f59e0b; font-weight: 600; margin-left: 4px;
+  }
+
+  /* ===== 备菜页 ===== */
+  .back-btn { background: none; border: none; font-size: 20px; cursor: pointer; padding: 6px; color: var(--text-muted); }
+  .prep-header { text-align: center; margin-bottom: 20px; }
+  .prep-header .recipe-emoji { font-size: 48px; }
+  .prep-header h2 { font-size: 20px; margin: 6px 0; }
+
+  .section-title {
+    font-size: 14px; font-weight: 600; color: var(--text-muted);
+    letter-spacing: 1px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+  }
+  .ingredient-item {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    background: var(--card); border-radius: 10px; margin-bottom: 6px;
+    cursor: pointer; transition: all 0.15s; box-shadow: var(--shadow);
+  }
+  .ingredient-item.checked { opacity: 0.4; }
+  .ingredient-item.checked .ing-name { text-decoration: line-through; }
+  .ing-checkbox {
+    width: 22px; height: 22px; border: 2px solid var(--border); border-radius: 50%;
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; transition: all 0.15s;
+  }
+  .ingredient-item.checked .ing-checkbox { background: var(--green); border-color: var(--green); color: #fff; }
+  .ing-name { flex: 1; font-size: 15px; }
+  .ing-amount { color: var(--orange-dark); font-weight: 600; font-size: 14px; }
+
+  .btn {
+    display: block; width: 100%; padding: 14px; border: none; border-radius: 12px;
+    font-size: 17px; font-weight: 600; cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--orange); color: #fff; margin-top: 20px; }
+  .btn-primary:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+  .btn-outline { background: var(--card); color: var(--orange); border: 2px solid var(--orange); }
+  .btn-sm {
+    padding: 6px 14px; font-size: 12px; border-radius: 8px; width: auto; display: inline-block;
+  }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-blue { background: var(--blue); color: #fff; }
+
+  /* ===== 做菜页 ===== */
+  .cooking-topbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .cooking-title { font-size: 15px; font-weight: 600; flex: 1; }
+  .step-counter { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+
+  .progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-bottom: 24px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--orange); border-radius: 2px; transition: width 0.3s ease; }
+
+  .step-card {
+    background: var(--card); border-radius: 20px; padding: 28px 22px;
+    box-shadow: var(--shadow); text-align: center; min-height: 200px;
+    display: flex; flex-direction: column; justify-content: center;
+    transition: all 0.25s ease; position: relative; overflow: hidden;
+  }
+  .step-number { font-size: 12px; font-weight: 600; color: var(--orange); letter-spacing: 2px; margin-bottom: 12px; }
+  .step-text { font-size: 22px; font-weight: 600; line-height: 1.5; margin-bottom: 12px; }
+  .step-tip {
+    font-size: 13px; color: var(--text-muted); background: #fffbeb;
+    padding: 10px 14px; border-radius: 8px; display: inline-block; margin: 0 auto;
+  }
+
+  .timer-box { margin: 20px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .timer-display {
+    font-size: 56px; font-weight: 700; font-family: 'SF Mono', 'Courier New', monospace;
+    color: var(--orange-dark); letter-spacing: 2px;
+  }
+  .timer-display.warning { color: var(--red); animation: pulse 0.6s ease infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .timer-label { font-size: 12px; color: var(--text-muted); letter-spacing: 1px; }
+  .timer-btn-group { display: flex; gap: 10px; justify-content: center; }
+  .timer-btn {
+    padding: 8px 20px; border-radius: 20px; border: 2px solid var(--orange);
+    background: #fff; color: var(--orange); font-weight: 600; font-size: 14px; cursor: pointer;
+  }
+  .timer-btn.running { background: var(--red); color: #fff; border-color: var(--red); }
+
+  .action-bar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 480px; padding: 12px 16px 20px;
+    background: linear-gradient(transparent, var(--bg) 30%);
+    display: flex; gap: 12px; align-items: center;
+  }
+  .btn-prev {
+    flex: 0 0 80px; padding: 14px 0; border-radius: 12px;
+    border: 2px solid var(--border); background: var(--card);
+    font-size: 15px; cursor: pointer; color: var(--text-muted);
+  }
+  .btn-prev:disabled { opacity: 0.3; }
+  .btn-next {
+    flex: 1; padding: 16px; border-radius: 12px; border: none;
+    background: var(--orange); color: #fff; font-size: 17px;
+    font-weight: 600; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn-next:active { background: var(--orange-dark); transform: scale(0.98); }
+  .btn-next.finish { background: var(--green); }
+
+  /* ===== 完成页 ===== */
+  .done-screen { text-align: center; padding-top: 60px; }
+  .done-icon { font-size: 72px; margin-bottom: 16px; animation: bounce 0.6s ease; }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-20px); }
+    60% { transform: translateY(-8px); }
+  }
+
+  /* ===== 星级评分 ===== */
+  .star-rating { display: flex; gap: 4px; justify-content: center; margin: 12px 0 8px; }
+  .star-btn {
+    font-size: 36px; cursor: pointer; color: #d4d4d4; transition: color 0.1s;
+    user-select: none; line-height: 1; background: none; border: none; padding: 0 2px;
+  }
+  .star-btn.filled { color: #f59e0b; }
+  .star-btn.readonly { cursor: default; }
+  .rating-label { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .rating-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ===== 管理后台 ===== */
+  .admin-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 20px;
+  }
+  .admin-header h2 { flex: 1; font-size: 20px; }
+
+  .admin-card {
+    background: var(--card); border-radius: 14px; padding: 16px;
+    margin-bottom: 10px; box-shadow: var(--shadow);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .admin-card .recipe-emoji { font-size: 36px; width: 50px; }
+  .admin-card .recipe-info { flex: 1; }
+  .admin-card .recipe-name { font-size: 16px; }
+  .admin-card .recipe-steps-count { font-size: 12px; color: var(--text-muted); }
+  .admin-card-actions { display: flex; gap: 6px; }
+
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 8px; border: 2px solid var(--border);
+    background: var(--card); font-size: 16px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; color: var(--text-muted);
+    transition: all 0.15s;
+  }
+  .icon-btn:active { background: #f5f5f4; }
+  .icon-btn.danger { color: var(--red); border-color: #fecaca; }
+  .icon-btn.danger:active { background: #fef2f2; }
+
+  /* 表单 */
+  .form-group { margin-bottom: 14px; }
+  .form-label {
+    display: block; font-size: 13px; font-weight: 600; color: var(--text-muted);
+    margin-bottom: 4px; letter-spacing: 0.5px;
+  }
+  .form-input, .form-textarea {
+    width: 100%; padding: 10px 14px; border: 2px solid var(--border);
+    border-radius: 10px; font-size: 15px; font-family: inherit;
+    background: var(--card); color: var(--text); transition: border-color 0.2s;
+  }
+  .form-input:focus, .form-textarea:focus {
+    outline: none; border-color: var(--orange);
+  }
+  .form-textarea { resize: vertical; min-height: 60px; }
+  .form-row { display: flex; gap: 10px; }
+  .form-row > * { flex: 1; }
+
+  /* 步骤编辑器 */
+  .step-editor-item {
+    background: var(--card); border-radius: 12px; padding: 14px;
+    margin-bottom: 10px; box-shadow: var(--shadow);
+    border-left: 4px solid var(--orange); position: relative;
+  }
+  .step-editor-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .step-editor-num {
+    font-size: 13px; font-weight: 700; color: var(--orange);
+  }
+  .step-editor-actions { display: flex; gap: 4px; }
+  .move-btn {
+    width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border);
+    background: #fff; font-size: 12px; cursor: pointer; color: var(--text-muted);
+  }
+  .move-btn:active { background: #f5f5f4; }
+  .move-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .step-editor-body { display: flex; flex-direction: column; gap: 8px; }
+  .step-editor-row { display: flex; gap: 8px; }
+  .step-editor-row .form-input { font-size: 14px; }
+  .step-editor-row .time-input { flex: 0 0 90px; }
+
+  /* 食材/工具编辑器 */
+  .tag-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  }
+  .tag-row .form-input { font-size: 14px; }
+
+  .add-btn {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    width: 100%; padding: 12px; border: 2px dashed var(--border);
+    border-radius: 10px; background: none; color: var(--text-muted);
+    font-size: 14px; cursor: pointer; margin-top: 10px;
+    transition: all 0.15s;
+  }
+  .add-btn:hover { border-color: var(--orange); color: var(--orange); }
+
+  .section-card {
+    background: var(--card); border-radius: 14px; padding: 16px;
+    margin-bottom: 16px; box-shadow: var(--shadow);
+  }
+
+  .voice-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; margin-top: 12px;
+  }
+  .voice-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px 14px; border-radius: 18px; border: 1.5px solid var(--border);
+    background: var(--card); font-size: 12px; cursor: pointer;
+    color: var(--text-muted); transition: all 0.15s;
+  }
+  .voice-btn:active { background: #f5f5f4; }
+  .voice-btn.on { border-color: var(--green); color: var(--green); background: #f0fdf4; }
+  .voice-btn.off { border-color: #fecaca; color: var(--red); }
+  .voice-btn.accent { border-color: var(--orange); color: var(--orange); }
+
+  /* 音色选择弹窗 */
+  .voice-modal-overlay {
+    position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.4);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  }
+  .voice-modal-overlay.show { opacity: 1; pointer-events: auto; }
+  .voice-modal {
+    width: 100%; max-width: 480px; max-height: 60vh;
+    background: var(--card); border-radius: 20px 20px 0 0;
+    overflow: hidden; display: flex; flex-direction: column;
+    transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .voice-modal-overlay.show .voice-modal { transform: translateY(0); }
+  .voice-modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .voice-modal-title { font-size: 16px; font-weight: 600; }
+  .voice-modal-close {
+    background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted);
+  }
+  .voice-modal-list {
+    flex: 1; overflow-y: auto; padding: 8px 0; -webkit-overflow-scrolling: touch;
+  }
+  .voice-option {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    cursor: pointer; transition: background 0.1s; border: none; background: none; width: 100%; text-align: left;
+    font-family: inherit; font-size: 14px; color: var(--text);
+  }
+  .voice-option:active { background: #f5f5f4; }
+  .voice-option.selected { background: var(--orange-light); }
+  .voice-option .voice-avatar {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; background: #f5f5f4;
+  }
+  .voice-option.selected .voice-avatar { background: var(--orange); color: #fff; }
+  .voice-option-info { flex: 1; min-width: 0; }
+  .voice-option-name { font-weight: 600; }
+  .voice-option-lang { font-size: 11px; color: var(--text-muted); }
+  .voice-option-check { color: var(--orange); font-weight: 700; font-size: 14px; }
+  .voice-preview-btn {
+    padding: 4px 10px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--card); font-size: 11px; cursor: pointer; color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .voice-preview-btn:active { background: var(--orange-light); color: var(--orange); }
+
+  .empty-state {
+    text-align: center; padding: 40px 20px; color: var(--text-muted);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+  /* ===== 设置面板（内嵌折叠） ===== */
+  .settings-panel-inline {
+    background: var(--card); border-radius: 14px;
+    box-shadow: var(--shadow); margin-bottom: 2px; overflow: hidden;
+  }
+  .settings-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; font-size: 14px; font-weight: 600;
+    cursor: pointer; user-select: none;
+  }
+  .settings-toggle:active { background: #f5f5f4; }
+  .settings-body {
+    max-height: 50vh; overflow-y: auto; padding: 0 16px 16px;
+    -webkit-overflow-scrolling: touch; transition: max-height 0.3s ease, padding 0.3s ease;
+  }
+  .settings-panel-inline.collapsed .settings-body { max-height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; }
+  .settings-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  .settings-item {
+    background: var(--bg); border-radius: 10px; padding: 10px 12px;
+  }
+  .settings-label {
+    font-size: 12px; font-weight: 600; color: var(--text-muted);
+  }
+
+  /* ===== 悬浮计时器 ===== */
+  .floating-timer {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 500; background: var(--orange);
+    color: #fff; border-radius: 24px; padding: 8px 16px;
+    display: flex; align-items: center; gap: 8px;
+    box-shadow: 0 4px 20px rgba(249,115,22,0.4);
+    cursor: pointer; user-select: none;
+    animation: floatIn 0.25s ease;
+  }
+  @keyframes floatIn {
+    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+  }
+  .floating-timer.warn { background: var(--red); box-shadow: 0 4px 20px rgba(239,68,68,0.5); animation: floatPulse 0.6s ease infinite; }
+  @keyframes floatPulse {
+    0%, 100% { transform: translateX(-50%) scale(1); }
+    50% { transform: translateX(-50%) scale(1.05); }
+  }
+  .floating-timer-icon { font-size: 18px; }
+  .floating-timer-text { font-size: 18px; font-weight: 700; font-family: 'SF Mono','Courier New',monospace; min-width: 48px; }
+  .floating-timer-name { font-size: 12px; opacity: 0.85; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ===== AI 浮动按钮 ===== */
+  .ai-fab {
+    position: fixed; bottom: 90px; right: 16px; z-index: 100;
+    width: 52px; height: 52px; border-radius: 50%; border: none;
+    background: var(--orange); color: #fff; font-size: 26px;
+    cursor: pointer; box-shadow: 0 4px 16px rgba(249,115,22,0.35);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s; animation: fabPulse 2s ease infinite;
+  }
+  .ai-fab:active { transform: scale(0.9); }
+  @keyframes fabPulse {
+    0%, 100% { box-shadow: 0 4px 16px rgba(249,115,22,0.35); }
+    50% { box-shadow: 0 4px 24px rgba(249,115,22,0.55); }
+  }
+
+  /* ===== AI 聊天面板 ===== */
+  .ai-chat-panel {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%) translateY(100%);
+    width: 100%; max-width: 480px; height: 65vh; z-index: 200;
+    background: var(--card); border-radius: 20px 20px 0 0;
+    display: flex; flex-direction: column;
+    box-shadow: 0 -4px 30px rgba(0,0,0,0.18);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .ai-chat-panel.open { transform: translateX(-50%) translateY(0); }
+  .ai-chat-overlay {
+    position: fixed; inset: 0; z-index: 199; background: rgba(0,0,0,0.3);
+    opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  }
+  .ai-chat-overlay.show { opacity: 1; pointer-events: auto; }
+
+  .ai-chat-header {
+    display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .ai-chat-header .ai-avatar { font-size: 28px; }
+  .ai-chat-header-info { flex: 1; min-width: 0; }
+  .ai-chat-title { font-size: 15px; font-weight: 600; }
+  .ai-chat-context { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ai-chat-close {
+    background: none; border: none; font-size: 20px; cursor: pointer;
+    color: var(--text-muted); padding: 4px 8px;
+  }
+
+  .ai-chat-body {
+    flex: 1; overflow-y: auto; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ai-chat-body .ai-empty {
+    text-align: center; color: var(--text-muted); padding: 40px 20px; font-size: 14px;
+  }
+
+  .ai-msg { max-width: 85%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-break: break-word; }
+  .ai-msg.user {
+    align-self: flex-end; background: var(--orange); color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .ai-msg.assistant {
+    align-self: flex-start; background: #f5f5f4; color: var(--text);
+    border-bottom-left-radius: 4px;
+  }
+  .ai-msg .msg-time { font-size: 10px; opacity: 0.6; margin-top: 4px; text-align: right; }
+
+  /* 打字动画 */
+  .ai-typing { align-self: flex-start; display: flex; gap: 4px; padding: 12px 16px; }
+  .ai-typing span {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted);
+    animation: typingBounce 1.2s ease infinite;
+  }
+  .ai-typing span:nth-child(2) { animation-delay: 0.15s; }
+  .ai-typing span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-8px); opacity: 1; }
+  }
+
+  .ai-chat-footer {
+    display: flex; gap: 8px; padding: 10px 14px 16px;
+    border-top: 1px solid var(--border); flex-shrink: 0;
+  }
+  .ai-chat-input {
+    flex: 1; padding: 10px 14px; border: 2px solid var(--border);
+    border-radius: 20px; font-size: 15px; font-family: inherit;
+    background: var(--bg); outline: none;
+  }
+  .ai-chat-input:focus { border-color: var(--orange); }
+  .ai-chat-send {
+    width: 42px; height: 42px; border-radius: 50%; border: none;
+    background: var(--orange); color: #fff; font-size: 18px;
+    cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .ai-chat-send:disabled { opacity: 0.4; }
+
+  /* ===== AI 推荐区 ===== */
+  .ai-recommend {
+    background: var(--card); border-radius: 14px; padding: 14px;
+    margin-bottom: 14px; box-shadow: var(--shadow);
+  }
+  .ai-recommend-label { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
+  .ai-recommend-row { display: flex; gap: 8px; }
+  .ai-recommend-input {
+    flex: 1; padding: 10px 14px; border: 2px solid var(--border);
+    border-radius: 10px; font-size: 14px; font-family: inherit;
+    background: var(--bg); outline: none;
+  }
+  .ai-recommend-input:focus { border-color: var(--orange); }
+  .ai-recommend-btn {
+    padding: 10px 16px; border-radius: 10px; border: none;
+    background: var(--orange); color: #fff; font-size: 13px;
+    font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  .ai-recommend-btn:disabled { opacity: 0.5; }
+  .ai-recommend-result {
+    margin-top: 10px; padding: 12px; background: var(--orange-light);
+    border-radius: 10px; font-size: 13px; display: none; cursor: pointer;
+  }
+  .ai-recommend-result.show { display: block; }
+  .ai-recommend-result .rec-dish { font-weight: 700; color: var(--orange-dark); font-size: 15px; }
+  .ai-recommend-result .rec-reason { color: var(--text-muted); margin-top: 2px; }
+  .ai-recommend-result .rec-hint { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ===== API Key 设置 ===== */
+  .api-key-section {
+    background: var(--card); border-radius: 14px; padding: 16px;
+    margin-top: 16px; box-shadow: var(--shadow);
+  }
+  .api-key-row { display: flex; gap: 8px; margin-top: 8px; }
+  .api-key-input {
+    flex: 1; padding: 8px 12px; border: 2px solid var(--border);
+    border-radius: 8px; font-size: 13px; font-family: monospace;
+    background: var(--bg); outline: none;
+  }
+  .api-key-input:focus { border-color: var(--orange); }
+
+  /* ===== 步骤滑动 ===== */
+  .step-card.swiping { transition: none !important; }
+  .step-card.animating { transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s ease; }
+  .swipe-hint {
+    text-align: center; font-size: 10px; color: var(--text-muted);
+    margin-top: 4px; opacity: 0.6;
+  }
+
+</style>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f97316">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="掌厨">
+<link rel="apple-touch-icon" href="icon-384.png">
+<script src="recipes.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- ==================== 顶部栏 ==================== -->
+<div class="header" id="global-header">
+  <div class="logo"><span class="logo-icon">🍳</span>掌厨</div>
+  <button class="admin-entry" id="btn-admin-entry" title="管理后台">⚙️</button>
+</div>
+
+<!-- ==================== 首页 ==================== -->
+<div class="screen active" id="screen-home">
+  <div class="hero">
+    <h1>今天想吃什么？</h1>
+    <p>选一道，AI 陪你一步步做</p>
+  </div>
+  <!-- 首页搜索 -->
+  <div style="position:relative; margin:0 0 8px;">
+    <input class="form-input" id="home-search" type="text" placeholder="🔍 搜索 50 道菜谱..." oninput="renderHome()"
+           style="padding-left:36px; font-size:14px; border-radius:10px;">
+    <span id="home-search-count" style="display:none;text-align:center;font-size:11px;color:var(--text-muted);margin-top:4px;"></span>
+  </div>
+  <div class="scroll-row" id="tag-scroll-row">
+    <button class="scroll-arrow" onclick="scrollBar('tag-bar', -200)" disabled id="tag-arrow-l">◀</button>
+    <div class="sort-bar" id="tag-bar" style="flex:1; padding-bottom:0;" onscroll="updateScrollArrows('tag-bar','tag-arrow-l','tag-arrow-r')"></div>
+    <button class="scroll-arrow" onclick="scrollBar('tag-bar', 200)" id="tag-arrow-r">▶</button>
+  </div>
+  <div class="scroll-row" id="sort-scroll-row">
+    <button class="scroll-arrow" onclick="scrollBar('sort-bar', -200)" disabled id="sort-arrow-l">◀</button>
+    <div class="sort-bar" id="sort-bar" style="flex:1; padding-bottom:0;" onscroll="updateScrollArrows('sort-bar','sort-arrow-l','sort-arrow-r')"></div>
+    <button class="scroll-arrow" onclick="scrollBar('sort-bar', 200)" id="sort-arrow-r">▶</button>
+  </div>
+  <div class="ai-recommend" id="ai-recommend">
+    <div class="ai-recommend-label">🛒 冰箱里有什么？AI 帮你选菜</div>
+    <div class="ai-recommend-row">
+      <input class="ai-recommend-input" id="ai-recommend-input" placeholder="例如：鸡蛋、番茄、青椒、猪肉..." onkeydown="if(event.key==='Enter')getAiRecommendation()">
+      <button class="ai-recommend-btn" id="ai-recommend-btn" onclick="getAiRecommendation()">🤖 推荐</button>
+    </div>
+    <div class="ai-recommend-result" id="ai-recommend-result" onclick="goToRecommended()"></div>
+  </div>
+  <div id="recipe-list"></div>
+  <div id="empty-home-msg" style="text-align:center; margin-top:16px;"></div>
+</div>
+
+<!-- ==================== 备菜页 ==================== -->
+<div class="screen" id="screen-prep">
+  <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+    <button class="back-btn" onclick="goScreen('home')">←</button>
+    <span style="font-weight:600;">备菜清单</span>
+  </div>
+  <div class="prep-header" id="prep-header"></div>
+  <div class="section-title">📋 食材清单（备齐打勾）</div>
+  <div id="ingredients-list"></div>
+  <p style="text-align:center;font-size:10px;color:var(--text-muted);margin-top:6px;display:none;" id="prep-swipe-hint">👉 在食材列表上从左向右滑动 → 一键备齐</p>
+  <div class="section-title" style="margin-top:20px;">🔧 所需工具</div>
+  <div id="tools-list" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+  <button class="btn btn-outline" id="btn-check-all" style="margin-top:12px; position:relative; overflow:hidden;">
+    <span id="check-all-text">👆 长按一键备齐</span>
+    <span id="check-all-progress" style="position:absolute;left:0;top:0;height:100%;background:var(--green);opacity:0.2;width:0%;transition:none;border-radius:12px;"></span>
+  </button>
+  <button class="btn btn-primary" id="btn-start-cook" disabled>全部备齐，开始做菜 →</button>
+</div>
+
+<!-- ==================== 做菜页 ==================== -->
+<div class="screen" id="screen-cook">
+  <div class="cooking-topbar">
+    <button class="back-btn" onclick="goPrep()">←</button>
+    <button class="back-btn" onclick="if(confirm('确定要回到首页吗？'))goScreen('home')" title="回到首页" style="font-size:16px;">🏠</button>
+    <span class="cooking-title" id="cooking-title"></span>
+    <span class="step-counter" id="step-counter"></span>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+  <div class="step-card" id="step-card">
+    <div class="step-number" id="step-number"></div>
+    <div class="step-text" id="step-text"></div>
+    <div class="step-tip" id="step-tip" style="display:none;"></div>
+    <div class="timer-box" id="timer-box" style="display:none;">
+      <div class="timer-display" id="timer-display">00:00</div>
+      <div class="timer-label" id="timer-label"></div>
+      <div class="timer-btn-group">
+        <button class="timer-btn" id="timer-btn" onclick="toggleTimer()">开始计时</button>
+        <button class="timer-btn" onclick="resetTimer()" style="border-color:var(--border); color:var(--text-muted);">重置</button>
+      </div>
+    </div>
+  </div>
+  <div class="voice-bar">
+    <button class="voice-btn on" id="voice-toggle" onclick="toggleVoice()">🔊 语音播报中</button>
+    <button class="voice-btn" id="voice-replay" onclick="replayStep()">🔁 重播</button>
+    <button class="voice-btn accent" onclick="openVoiceSelector()">🎵 音色</button>
+  </div>
+  <div class="swipe-hint">← 左滑下一步 · 右滑上一步 →</div>
+
+  <!-- 音色选择弹窗 -->
+  <div class="voice-modal-overlay" id="voice-modal-overlay" onclick="closeVoiceSelector(event)">
+    <div class="voice-modal" onclick="event.stopPropagation()">
+      <div class="voice-modal-header">
+        <span class="voice-modal-title">🎵 选择音色</span>
+        <button class="voice-modal-close" onclick="closeVoiceSelector()">✕</button>
+      </div>
+      <div style="padding:6px 16px;" id="voice-sort-pills"></div>
+      <div class="voice-modal-list" id="voice-modal-list">
+        <div style="text-align:center;padding:30px;color:var(--text-muted);">正在加载音色列表...</div>
+      </div>
+    </div>
+  </div>
+  <div class="action-bar">
+    <button class="btn-prev" id="btn-prev" onclick="prevStep()">← 上一步</button>
+    <button class="btn-next" id="btn-next" onclick="nextStep()">下一步 →</button>
+  </div>
+  <!-- AI 助手 -->
+  <button class="ai-fab" id="ai-fab" onclick="toggleChat()" title="AI 做菜助手">🤖</button>
+  <div class="ai-chat-overlay" id="ai-chat-overlay" onclick="toggleChat()"></div>
+  <div class="ai-chat-panel" id="ai-chat-panel">
+    <div class="ai-chat-header">
+      <span class="ai-avatar">🤖</span>
+      <div class="ai-chat-header-info">
+        <div class="ai-chat-title">AI 做菜助手</div>
+        <div class="ai-chat-context" id="ai-chat-context">准备就绪</div>
+      </div>
+      <button class="ai-chat-close" onclick="toggleChat()">✕</button>
+    </div>
+    <div class="ai-chat-body" id="ai-chat-body">
+      <div class="ai-empty">👋 我是你的 AI 做菜助手<br>做菜时遇到任何问题都可以问我！</div>
+    </div>
+    <div class="ai-chat-footer">
+      <input class="ai-chat-input" id="ai-chat-input" placeholder="输入问题..." onkeydown="if(event.key==='Enter')sendMessage()">
+      <button class="ai-chat-send" id="ai-chat-send" onclick="sendMessage()">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 完成页 ==================== -->
+<div class="screen" id="screen-done">
+  <div class="done-screen">
+    <div class="done-icon">🎉</div>
+    <h2 id="done-title">太棒了！</h2>
+    <p id="done-desc">你成功完成了这道菜</p>
+    <div id="rating-section" style="margin-top:20px;">
+      <p class="rating-label">给这道菜打分</p>
+      <div class="star-rating" id="star-rating"></div>
+      <p class="rating-hint" id="rating-hint">点击星星打分</p>
+    </div>
+    <button class="btn btn-outline" onclick="goHomeFromDone()" style="width:auto; display:inline-block; padding:14px 40px;">再选一道 →</button>
+  </div>
+</div>
+
+<!-- ==================== 管理后台 ==================== -->
+<div class="screen" id="screen-admin-list">
+  <div class="admin-header">
+    <button class="back-btn" onclick="goScreen('home')">←</button>
+    <h2>⚙️ 设置 & 菜谱</h2>
+  </div>
+
+  <!-- 设置面板（顶部折叠） -->
+  <div class="settings-panel-inline" id="settings-panel">
+    <div class="settings-toggle" onclick="toggleSettings()">
+      <span>⚙️ 应用设置</span>
+      <span id="settings-arrow" style="transition:transform 0.25s;font-size:12px;">▼</span>
+    </div>
+    <div class="settings-body" id="settings-body">
+      <div class="settings-grid">
+        <!-- 备菜方式 -->
+        <div class="settings-item">
+          <div class="settings-label">📋 一键备齐</div>
+          <p style="font-size:10px; color:var(--text-muted); margin:2px 0 6px;" id="prep-mode-label">长按</p>
+          <button class="btn btn-sm" onclick="togglePrepMode()" id="prep-mode-btn">切换为滑动</button>
+        </div>
+        <!-- 计时器 -->
+        <div class="settings-item">
+          <div class="settings-label">⏱ 计时器</div>
+          <p style="font-size:10px; color:var(--text-muted); margin:2px 0 6px;" id="timer-mode-label">自动</p>
+          <button class="btn btn-sm" onclick="toggleTimerMode()" id="timer-mode-btn">切换为手动</button>
+        </div>
+        <!-- API Key -->
+        <div class="settings-item" style="grid-column: 1 / -1;">
+          <div class="settings-label">🔑 DeepSeek API Key</div>
+          <div style="display:flex; gap:6px; margin-top:4px;">
+            <input class="form-input" id="api-key-input" type="password" placeholder="输入sk-..." style="font-size:12px; flex:1;">
+            <button class="btn btn-sm btn-blue" onclick="saveApiKey()" style="flex-shrink:0;">保存</button>
+          </div>
+          <p style="font-size:9px; color:var(--text-muted); margin-top:3px;">仅存本地浏览器</p>
+        </div>
+        <!-- 音色管理 -->
+        <div class="settings-item" style="grid-column: 1 / -1;">
+          <div class="settings-label">🎵 音色管理</div>
+          <div id="voice-admin-sort-pills" style="margin:4px 0;"></div>
+          <div id="voice-manage-list" style="max-height:120px; overflow-y:auto;"></div>
+          <p style="font-size:9px; color:var(--text-muted); margin-top:2px;" id="voice-manage-empty">暂无音色数据</p>
+        </div>
+        <!-- 数据迁移 -->
+        <div class="settings-item" style="grid-column: 1 / -1;">
+          <div class="settings-label">💾 数据迁移</div>
+          <p style="font-size:9px; color:var(--text-muted); margin:2px 0 8px;">换设备时扫码或传文件，一键恢复</p>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn btn-sm" onclick="exportQR()" style="flex:1; min-width:70px;">📱 二维码分享</button>
+            <button class="btn btn-sm" onclick="startScan()" style="flex:1; min-width:70px;">📷 扫码导入</button>
+            <button class="btn btn-sm" onclick="exportData()" style="flex:1; min-width:70px;">📤 导出文件</button>
+            <button class="btn btn-sm" onclick="document.getElementById('import-file').click()" style="flex:1; min-width:70px;">📥 导入文件</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 隐藏的文件导入 input -->
+  <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importData(this)">
+
+  <!-- QR 码展示弹窗 -->
+  <div class="voice-modal-overlay" id="qr-overlay" onclick="closeQR()">
+    <div class="voice-modal" onclick="event.stopPropagation()" style="max-height:70vh;">
+      <div class="voice-modal-header">
+        <span class="voice-modal-title">📱 扫码迁移数据</span>
+        <button class="voice-modal-close" onclick="closeQR()">✕</button>
+      </div>
+      <div style="text-align:center; padding:16px;">
+        <div id="qr-container" style="display:inline-block; background:#fff; padding:8px; border-radius:8px;"></div>
+        <p style="font-size:11px; color:var(--text-muted); margin-top:10px;" id="qr-hint">
+          用另一台设备打开掌厨 → 管理后台 → 📷 扫码导入
+        </p>
+        <p style="font-size:10px; color:var(--text-muted);" id="qr-size-info"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 扫码区域 -->
+  <div class="voice-modal-overlay" id="scan-overlay" onclick="stopScan()">
+    <div class="voice-modal" onclick="event.stopPropagation()" style="max-height:70vh;">
+      <div class="voice-modal-header">
+        <span class="voice-modal-title">📷 扫描二维码</span>
+        <button class="voice-modal-close" onclick="stopScan()">✕</button>
+      </div>
+      <div style="padding:12px;">
+        <div id="qr-reader" style="width:100%;"></div>
+        <p style="font-size:10px; color:var(--text-muted); text-align:center; margin-top:8px;" id="scan-status">
+          将二维码对准摄像头
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 搜索栏 -->
+  <div style="position:relative; margin-bottom:14px; margin-top:14px;">
+    <input class="form-input" id="recipe-search" type="text" placeholder="🔍 搜索菜谱..." oninput="renderAdminList()"
+           style="padding-left:36px; font-size:15px; border-radius:10px;">
+  </div>
+
+  <div id="admin-recipe-list"></div>
+  <button class="add-btn" onclick="openRecipeEditor(null)">+ 添加新菜谱</button>
+  <p style="text-align:center; color:var(--text-muted); font-size:12px; margin-top:8px; margin-bottom:20px;">
+    💡 所有修改自动保存到本地浏览器
+  </p>
+</div>
+
+<!-- ==================== 菜谱编辑器 ==================== -->
+<div class="screen" id="screen-admin-editor">
+  <div class="admin-header">
+    <button class="back-btn" onclick="goScreen('admin-list')">←</button>
+    <h2 id="editor-title">编辑菜谱</h2>
+    <button class="btn btn-sm btn-blue" onclick="saveRecipe()">💾 保存</button>
+  </div>
+
+  <!-- 基本信息 -->
+  <div class="section-card">
+    <h3 style="font-size:15px; margin-bottom:12px;">📝 基本信息</h3>
+    <div class="form-row">
+      <div class="form-group" style="flex:0 0 70px;">
+        <label class="form-label">图标</label>
+        <input class="form-input" id="edit-emoji" placeholder="🍅" maxlength="4" style="text-align:center; font-size:28px;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">菜名</label>
+        <input class="form-input" id="edit-name" placeholder="例如：番茄炒蛋">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">预计用时</label>
+        <input class="form-input" id="edit-time" placeholder="例如：15分钟">
+      </div>
+      <div class="form-group">
+        <label class="form-label">难度</label>
+        <select class="form-input" id="edit-difficulty">
+          <option value="入门">入门</option>
+          <option value="家常">家常</option>
+          <option value="进阶">进阶</option>
+        </select>
+      </div>
+    </div>
+    <!-- 标签 -->
+    <div class="form-group" style="margin-top:4px;">
+      <label class="form-label">🏷 标签</label>
+      <div id="edit-tags" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:4px;"></div>
+    </div>
+    <!-- AI 生成按钮 -->
+    <button class="btn btn-primary" onclick="generateRecipeWithAI()" id="ai-gen-btn"
+            style="width:100%; margin-top:12px; padding:11px; font-size:15px;">
+      🤖 AI 帮我写菜谱
+    </button>
+    <p style="font-size:10px; color:var(--text-muted); text-align:center; margin-top:4px;" id="ai-gen-hint">
+      输入菜名后点击，AI 自动填写所有信息
+    </p>
+    <!-- 保存按钮 -->
+    <button class="btn btn-blue" onclick="saveRecipe()" id="save-btn-top"
+            style="width:100%; margin-top:10px; padding:13px; font-size:16px; font-weight:600;">
+      💾 保存菜谱
+    </button>
+  </div>
+
+  <!-- 食材 -->
+  <div class="section-card">
+    <h3 style="font-size:15px; margin-bottom:12px;">🥬 食材清单</h3>
+    <div id="edit-ingredients"></div>
+    <button class="add-btn" onclick="addIngredientRow()">+ 添加食材</button>
+  </div>
+
+  <!-- 工具 -->
+  <div class="section-card">
+    <h3 style="font-size:15px; margin-bottom:12px;">🔧 所需工具</h3>
+    <div id="edit-tools" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;"></div>
+    <div class="tag-row" style="margin-top:8px;">
+      <input class="form-input" id="new-tool-input" placeholder="输入工具名称，回车添加" style="font-size:14px;"
+             onkeydown="if(event.key==='Enter'){ addTool(); event.preventDefault(); }">
+      <button class="btn btn-sm" onclick="addTool()" style="flex:0 0 auto;">添加</button>
+    </div>
+  </div>
+
+  <!-- 步骤 -->
+  <div class="section-card">
+    <h3 style="font-size:15px; margin-bottom:12px;">📖 做菜步骤</h3>
+    <div id="edit-steps"></div>
+    <button class="add-btn" onclick="addStep()">+ 添加步骤</button>
+  </div>
+
+  <p style="text-align:center; margin-top:12px; margin-bottom:20px;">
+    <button class="btn btn-outline" onclick="goScreen('admin-list')" style="padding:10px 48px;">← 返回列表</button>
+  </p>
+</div>
+
+<!-- ==================== 悬浮计时器（跨页面可见） ==================== -->
+<div class="floating-timer" id="floating-timer" style="display:none;" onclick="goScreen('cook')">
+  <span class="floating-timer-icon">⏱</span>
+  <span class="floating-timer-text" id="floating-timer-text">00:00</span>
+  <span class="floating-timer-name" id="floating-timer-name"></span>
+</div>
+
+<script>
+// ==================== 数据层 ====================
+const STORAGE_KEY = 'zhangchu_recipes';
+
+// 默认菜谱（从外部 recipes.js 加载，与 UI 逻辑分离）
+// 修改/新增菜谱：编辑 recipes.js 或通过管理后台操作
+// 加载数据
+function loadRecipes() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Object.keys(parsed).length > 0) {
+        // 从 DEFAULT_RECIPES 合并 tags 等新增字段到已有菜谱
+        var updated = false;
+        Object.keys(parsed).forEach(function(id) {
+          if (DEFAULT_RECIPES[id] && DEFAULT_RECIPES[id].tags && !parsed[id].tags) {
+            parsed[id].tags = DEFAULT_RECIPES[id].tags.slice();
+            updated = true;
+          }
+        });
+        if (updated) { saveRecipes(parsed); }
+        return parsed;
+      }
+    }
+  } catch(e) {}
+  // 首次使用，写入默认菜谱
+  saveRecipes(DEFAULT_RECIPES);
+  return JSON.parse(JSON.stringify(DEFAULT_RECIPES));
+}
+
+function saveRecipes(recipes) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
+  } catch(e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      alert('⚠️ 存储空间已满！\n\n请清理浏览器数据或删除部分自定义菜谱后重试。');
+    } else {
+      alert('⚠️ 保存失败：' + (e.message || '未知错误'));
+    }
+  }
+}
+
+let recipes = loadRecipes();
+
+// ==================== 排序偏好 ====================
+const SORT_MODE_KEY = 'zhangchu_sort_mode';
+const ORDER_KEY = 'zhangchu_recipe_order';
+let sortMode = 'custom';
+let recipeOrder = [];
+
+function loadSortPrefs() {
+  sortMode = localStorage.getItem(SORT_MODE_KEY) || 'custom';
+  try { recipeOrder = JSON.parse(localStorage.getItem(ORDER_KEY)) || []; } catch(e) { recipeOrder = []; }
+}
+loadSortPrefs();
+
+function saveSortPrefs() {
+  localStorage.setItem(SORT_MODE_KEY, sortMode);
+  localStorage.setItem(ORDER_KEY, JSON.stringify(recipeOrder));
+}
+
+// ==================== 评分数据 ====================
+const RATINGS_KEY = 'zhangchu_ratings';
+let ratings = {};
+
+function loadRatings() {
+  try { ratings = JSON.parse(localStorage.getItem(RATINGS_KEY)) || {}; } catch(e) { ratings = {}; }
+}
+loadRatings();
+
+function saveRatings() {
+  localStorage.setItem(RATINGS_KEY, JSON.stringify(ratings));
+}
+
+function getAvgRating(recipeId) {
+  var arr = ratings[recipeId];
+  if (!arr || arr.length === 0) return 0;
+  var sum = arr.reduce(function(a, b) { return a + b; }, 0);
+  return Math.round((sum / arr.length) * 10) / 10;
+}
+
+function getRatingCount(recipeId) {
+  return (ratings[recipeId] || []).length;
+}
+
+// ==================== DeepSeek API ====================
+const API_KEY_STORAGE = 'zhangchu_api_key';
+const AI_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+const AI_MODEL = 'deepseek-chat';
+
+function getApiKey() {
+  return localStorage.getItem(API_KEY_STORAGE) || '';
+}
+
+function setApiKey(key) {
+  localStorage.setItem(API_KEY_STORAGE, key.trim());
+}
+
+function saveApiKey() {
+  var input = document.getElementById('api-key-input');
+  var key = input.value.trim();
+  if (!key) { alert('请输入 API Key'); return; }
+  if (!key.startsWith('sk-')) {
+    if (!confirm('API Key 通常以 sk- 开头，你输入的似乎不是标准的 Key。确定保存吗？')) return;
+  }
+  setApiKey(key);
+  input.value = '';
+  alert('✅ API Key 已保存！');
+}
+
+function checkApiKey() {
+  var key = getApiKey();
+  if (!key) {
+    var input = prompt('首次使用 AI 功能，请输入你的 DeepSeek API Key：\n（在 platform.deepseek.com 申请）\n\n后续可在管理后台 ⚙️ 中修改');
+    if (input && input.trim()) {
+      setApiKey(input.trim());
+      return true;
+    }
+    return false;
+  }
+  return true;
+}
+
+async function callAI(systemPrompt, userMessage) {
+  var key = getApiKey();
+  if (!key) throw new Error('NO_KEY');
+
+  var resp = await fetch(AI_API_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + key,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: AI_MODEL,
+      max_tokens: 500,
+      temperature: 0.7,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!resp.ok) {
+    var err = await resp.json().catch(function() { return {}; });
+    if (resp.status === 401) throw new Error('AUTH');
+    if (resp.status === 429) throw new Error('RATE');
+    throw new Error(err.error ? err.error.message : 'API 错误 (' + resp.status + ')');
+  }
+
+  var data = await resp.json();
+  return data.choices[0].message.content;
+}
+
+// ==================== AI 聊天 ====================
+var chatOpen = false;
+
+function toggleChat() {
+  var panel = document.getElementById('ai-chat-panel');
+  var overlay = document.getElementById('ai-chat-overlay');
+  chatOpen = !chatOpen;
+
+  if (chatOpen) {
+    panel.classList.add('open');
+    overlay.classList.add('show');
+    updateChatContext();
+    document.getElementById('ai-chat-input').focus();
+  } else {
+    panel.classList.remove('open');
+    overlay.classList.remove('show');
+  }
+}
+
+function updateChatContext() {
+  var el = document.getElementById('ai-chat-context');
+  if (currentRecipe && currentRecipeId) {
+    el.textContent = '正在做：' + currentRecipe.name + ' · 第' + (cookingStep + 1) + '步';
+  } else {
+    el.textContent = '准备就绪';
+  }
+}
+
+function buildCookingContext() {
+  var r = currentRecipe;
+  var step = r && r.steps ? r.steps[cookingStep] : null;
+  var ingredients = r ? (r.ingredients || []).map(function(i) { return i.name + ' ' + (i.amount || ''); }).join('、') : '';
+  var allSteps = r ? (r.steps || []).map(function(s, i) { return '第' + (i + 1) + '步: ' + s.text; }).join('\n') : '';
+
+  return '你是「掌厨」APP 的 AI 烹饪助手，正在实时陪伴用户做菜。\n\n' +
+    '## 当前烹饪上下文\n' +
+    '- 菜名：' + (r ? r.name : '未知') + '\n' +
+    '- 当前步骤：第' + (cookingStep + 1) + '步 / 共' + ((r && r.steps) ? r.steps.length : 0) + '步\n' +
+    '- 步骤内容：' + (step ? step.text : '未开始') + '\n' +
+    '- 小贴士：' + (step && step.tip ? step.tip : '无') + '\n' +
+    '- 食材清单：' + ingredients + '\n' +
+    '- 全部步骤：\n' + allSteps + '\n\n' +
+    '## 你的角色\n' +
+    '你是有经验的家庭厨师，像朋友一样在厨房帮忙。回答要简洁（2-5句话），口语化，给出具体可操作的建议。\n\n' +
+    '常见场景处理：\n' +
+    '- 油温判断 → 给出视觉标准（油面波动、冒烟程度）\n' +
+    '- 调味失误 → 给出补救方案\n' +
+    '- 步骤疑问 → 解释作用和替代方法\n' +
+    '- 意外情况 → 安抚并给出解决方案\n\n' +
+    '请用中文回答，保持友好温暖的语气。';
+}
+
+function addChatMsg(role, text) {
+  var body = document.getElementById('ai-chat-body');
+  // Remove empty state
+  var emptyEl = body.querySelector('.ai-empty');
+  if (emptyEl) emptyEl.remove();
+
+  var div = document.createElement('div');
+  div.className = 'ai-msg ' + role;
+  var now = new Date();
+  var time = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  div.innerHTML = text.replace(/\n/g, '<br>') + '<div class="msg-time">' + time + '</div>';
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+  return div;
+}
+
+function showTyping() {
+  var body = document.getElementById('ai-chat-body');
+  var emptyEl = body.querySelector('.ai-empty');
+  if (emptyEl) emptyEl.remove();
+
+  var typing = document.createElement('div');
+  typing.className = 'ai-typing';
+  typing.id = 'ai-typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  body.appendChild(typing);
+  body.scrollTop = body.scrollHeight;
+}
+
+function hideTyping() {
+  var el = document.getElementById('ai-typing');
+  if (el) el.remove();
+}
+
+async function sendMessage() {
+  if (!checkApiKey()) return;
+
+  var input = document.getElementById('ai-chat-input');
+  var sendBtn = document.getElementById('ai-chat-send');
+  var text = input.value.trim();
+  if (!text) return;
+
+  // Show user message
+  addChatMsg('user', text);
+  input.value = '';
+  input.disabled = true;
+  sendBtn.disabled = true;
+
+  // Show typing
+  showTyping();
+
+  try {
+    var systemPrompt = buildCookingContext();
+    var reply = await callAI(systemPrompt, text);
+    hideTyping();
+    addChatMsg('assistant', reply);
+  } catch (e) {
+    hideTyping();
+    var errMsg = '';
+    if (e.message === 'NO_KEY') errMsg = '请先在管理后台 ⚙️ 设置 API Key';
+    else if (e.message === 'AUTH') errMsg = '❌ API Key 无效，请在管理后台 ⚙️ 中检查';
+    else if (e.message === 'RATE') errMsg = '⏳ 请求太频繁，请稍等几秒再试';
+    else if (e.name === 'TimeoutError' || e.message === 'AbortError') errMsg = '⏰ 响应超时，请检查网络后重试';
+    else errMsg = '😕 ' + (e.message || '网络错误，请重试');
+    addChatMsg('assistant', errMsg);
+  }
+
+  input.disabled = false;
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+// ==================== AI 推荐 ====================
+var recommendedRecipeId = null;
+
+function buildRecommendContext(userIngredients) {
+  var allIds = Object.keys(recipes);
+  var recipeList = allIds.map(function(id) {
+    var r = recipes[id];
+    var ings = (r.ingredients || []).map(function(i) { return i.name; }).join('、');
+    return '- ' + r.name + '（' + (r.difficulty || '') + ' / ' + (r.time || '') + '）：' + ings;
+  }).join('\n');
+
+  return '你是「掌厨」APP 的美食推荐助手。用户告诉你冰箱里有食材，你根据现有菜谱推荐最合适的。\n\n' +
+    '## 现有菜谱\n' + recipeList + '\n\n' +
+    '## 规则\n' +
+    '1. 优先推荐食材匹配度最高的菜\n' +
+    '2. 匹配度 >= 70% 就强烈推荐\n' +
+    '3. 缺少 1-2 样关键食材，说明缺什么但也可以推荐\n' +
+    '4. 完全不能做任何菜时，诚实告知并建议补充\n' +
+    '5. 只推荐现有菜谱中的菜，不要发明新菜\n\n' +
+    '## 输出格式（严格遵守！只输出一行）\n' +
+    '菜名|推荐理由（一句话）\n' +
+    '如果不能推荐：无|原因';
+}
+
+async function getAiRecommendation() {
+  if (!checkApiKey()) return;
+
+  var input = document.getElementById('ai-recommend-input');
+  var btn = document.getElementById('ai-recommend-btn');
+  var resultDiv = document.getElementById('ai-recommend-result');
+  var text = input.value.trim();
+  if (!text) { alert('请输入你冰箱里的食材'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '思考中...';
+  resultDiv.classList.remove('show');
+
+  try {
+    var systemPrompt = buildRecommendContext(text);
+    var reply = await callAI(systemPrompt, '我冰箱里有：' + text + '\n请推荐一道菜。');
+
+    // Parse reply: "菜名|理由"
+    var parts = reply.split('|');
+    var dishName = (parts[0] || '').trim();
+    var reason = (parts[1] || '').trim();
+
+    if (dishName === '无' || !dishName) {
+      resultDiv.innerHTML = '<div style="color:var(--text-muted);">😕 ' + (reason || '没找到合适的菜谱，试试补充更多食材？') + '</div>';
+      resultDiv.classList.add('show');
+      resultDiv.style.cursor = 'default';
+      resultDiv.onclick = null;
+      return;
+    }
+
+    // Find matching recipe
+    var matchedId = null;
+    Object.keys(recipes).forEach(function(id) {
+      if (recipes[id].name === dishName || recipes[id].name.indexOf(dishName) !== -1 || dishName.indexOf(recipes[id].name) !== -1) {
+        matchedId = id;
+      }
+    });
+
+    if (matchedId) {
+      recommendedRecipeId = matchedId;
+      resultDiv.innerHTML = '<div class="rec-dish">' + recipes[matchedId].emoji + ' ' + escHtml(recipes[matchedId].name) + '</div>' +
+        '<div class="rec-reason">' + escHtml(reason) + '</div>' +
+        '<div class="rec-hint">👆 点击直接开始做这道菜</div>';
+      resultDiv.classList.add('show');
+      resultDiv.style.cursor = 'pointer';
+      resultDiv.onclick = goToRecommended;
+    } else {
+      recommendedRecipeId = null;
+      resultDiv.innerHTML = '<div style="color:var(--text-muted);">🤔 AI 推荐了「' + escHtml(dishName) + '」，但菜谱中还没有这道菜。<br>' +
+        '理由：' + escHtml(reason) + '</div>';
+      resultDiv.classList.add('show');
+      resultDiv.style.cursor = 'default';
+      resultDiv.onclick = null;
+    }
+  } catch (e) {
+    resultDiv.innerHTML = '<div style="color:var(--red);">';
+    if (e.message === 'NO_KEY') resultDiv.innerHTML += '请先在管理后台 ⚙️ 设置 API Key';
+    else if (e.message === 'AUTH') resultDiv.innerHTML += '❌ API Key 无效，请在管理后台中检查';
+    else resultDiv.innerHTML += '😕 ' + (e.message || '网络错误，请重试');
+    resultDiv.innerHTML += '</div>';
+    resultDiv.classList.add('show');
+    resultDiv.style.cursor = 'default';
+    resultDiv.onclick = null;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🤖 推荐';
+}
+
+function goToRecommended() {
+  if (!recommendedRecipeId || !recipes[recommendedRecipeId]) return;
+  currentRecipeId = recommendedRecipeId;
+  currentRecipe = recipes[recommendedRecipeId];
+  renderPrep();
+  goScreen('prep');
+}
+
+// ==================== 初始化 API Key ====================
+function initApiKey() {
+  var key = getApiKey();
+  var input = document.getElementById('api-key-input');
+  if (input && key) {
+    input.placeholder = '已设置 (****' + key.slice(-4) + ')';
+  }
+}
+
+// ==================== 备菜模式 ====================
+var prepMode = 'longpress';  // 'swipe' | 'longpress'
+
+function loadPrepMode() {
+  prepMode = localStorage.getItem('zhangchu_prep_mode') || 'longpress';
+  applyPrepMode();
+}
+loadPrepMode();
+
+function applyPrepMode() {
+  var checkAllBtn = document.getElementById('btn-check-all');
+  var prepSwipeHint = document.getElementById('prep-swipe-hint');
+  var prepLabel = document.getElementById('prep-mode-label');
+  var prepBtn = document.getElementById('prep-mode-btn');
+  if (prepMode === 'swipe') {
+    if (checkAllBtn) checkAllBtn.style.display = 'none';
+    if (prepSwipeHint) prepSwipeHint.style.display = 'block';
+    if (prepLabel) prepLabel.textContent = '滑动';
+    if (prepBtn) prepBtn.textContent = '切换为长按';
+  } else {
+    if (checkAllBtn) checkAllBtn.style.display = 'block';
+    if (prepSwipeHint) prepSwipeHint.style.display = 'none';
+    if (prepLabel) prepLabel.textContent = '长按';
+    if (prepBtn) prepBtn.textContent = '切换为滑动';
+  }
+}
+
+// ==================== 计时器模式 ====================
+var timerAutoMode = 'auto';  // 'auto' | 'manual'
+
+function loadTimerMode() {
+  timerAutoMode = localStorage.getItem('zhangchu_timer_mode') || 'auto';
+  applyTimerMode();
+}
+loadTimerMode();
+
+function applyTimerMode() {
+  var label = document.getElementById('timer-mode-label');
+  var btn = document.getElementById('timer-mode-btn');
+  if (!label || !btn) return;
+  if (timerAutoMode === 'auto') {
+    label.textContent = '自动（切步骤即跑）';
+    btn.textContent = '切换为手动';
+  } else {
+    label.textContent = '手动（点击开始）';
+    btn.textContent = '切换为自动';
+  }
+}
+
+function toggleTimerMode() {
+  timerAutoMode = timerAutoMode === 'auto' ? 'manual' : 'auto';
+  localStorage.setItem('zhangchu_timer_mode', timerAutoMode);
+  applyTimerMode();
+}
+
+// ==================== 导航 ====================
+function goScreen(name, pushHistory) {
+  // 默认推一条历史记录，内部跳转（如滑动步骤）不推
+  if (pushHistory !== false) {
+    var state = { screen: name };
+    history.pushState(state, '', '#/' + name);
+    currentScreen = name;
+  }
+
+  document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  var target = document.getElementById('screen-' + name);
+  if (target) target.classList.add('active');
+  window.scrollTo(0, 0);
+
+  // 进入管理页时自动刷新列表
+  if (name === 'admin-list') { renderAdminList(); initApiKey(); renderVoiceManageList(); applyPrepMode(); applyTimerMode(); }
+  // 回首页刷新菜谱列表
+  if (name === 'home') renderHome();
+  // 离开做菜页时停止语音
+  var wasCooking = document.getElementById('screen-cook').classList.contains('active');
+  if (wasCooking && name !== 'cook') { stopSpeak(); }
+  // 从其他页进入做菜页时更新悬浮窗可见性
+  if (name === 'cook') { updateFloatingTimer(); }
+  else if (wasCooking && name !== 'cook') { updateFloatingTimer(); }
+  // 进入做菜页时更新 AI 助手上下文
+  if (name === 'cook') { updateChatContext(); }
+}
+
+var currentScreen = 'home';
+
+// 监听浏览器返回/前进按钮
+window.addEventListener('popstate', function(e) {
+  if (e.state && e.state.screen) {
+    goScreen(e.state.screen, false);
+  } else {
+    // 没有状态说明回到了最开始，回首页
+    goScreen('home', false);
+  }
+});
+
+// ==================== 首页 ====================
+function getSortedIds() {
+  var ids = Object.keys(recipes);
+  if (ids.length === 0) return [];
+
+  // Ensure recipeOrder includes all existing recipes
+  var existing = {};
+  var changed = false;
+  recipeOrder.forEach(function(id) { existing[id] = true; });
+  ids.forEach(function(id) {
+    if (!existing[id]) { recipeOrder.push(id); changed = true; }
+  });
+  // Remove deleted recipes from order
+  var oldLen = recipeOrder.length;
+  recipeOrder = recipeOrder.filter(function(id) { return !!recipes[id]; });
+  if (recipeOrder.length !== oldLen) changed = true;
+  if (changed) saveSortPrefs();
+
+  if (sortMode === 'custom') {
+    return recipeOrder.slice();
+  } else if (sortMode === 'rating') {
+    return ids.sort(function(a, b) {
+      var avgA = getAvgRating(a) || -1;
+      var avgB = getAvgRating(b) || -1;
+      if (avgB !== avgA) return avgB - avgA;
+      return recipeOrder.indexOf(a) - recipeOrder.indexOf(b);
+    });
+  } else if (sortMode === 'difficulty') {
+    var diffRank = { '入门': 0, '家常': 1, '进阶': 2 };
+    return ids.sort(function(a, b) {
+      var dA = diffRank[recipes[a].difficulty] !== undefined ? diffRank[recipes[a].difficulty] : 1;
+      var dB = diffRank[recipes[b].difficulty] !== undefined ? diffRank[recipes[b].difficulty] : 1;
+      if (dA !== dB) return dA - dB;
+      return recipeOrder.indexOf(a) - recipeOrder.indexOf(b);
+    });
+  } else if (sortMode === 'time') {
+    return ids.sort(function(a, b) {
+      var tA = parseInt(recipes[a].time) || 99;
+      var tB = parseInt(recipes[b].time) || 99;
+      if (tA !== tB) return tA - tB;
+      return recipeOrder.indexOf(a) - recipeOrder.indexOf(b);
+    });
+  }
+  return ids;
+}
+
+function getRecommendedIds() {
+  var allIds = Object.keys(recipes);
+  var rec = {};
+  var ratedWithAvg = {};
+
+  allIds.forEach(function(id) {
+    var avg = getAvgRating(id);
+    var cnt = getRatingCount(id);
+    if (cnt > 0) ratedWithAvg[id] = avg;
+  });
+
+  var ratedIds = Object.keys(ratedWithAvg);
+  if (ratedIds.length === 0) return rec;
+
+  // Top-rated: avg >= 4
+  var likedDiffs = {};
+  ratedIds.forEach(function(id) {
+    if (ratedWithAvg[id] >= 4) {
+      rec[id] = true;
+      if (recipes[id]) likedDiffs[recipes[id].difficulty] = true;
+    }
+  });
+
+  // Unrated recipes in liked difficulties
+  allIds.forEach(function(id) {
+    if (ratedWithAvg[id] !== undefined) return;
+    if (recipes[id] && likedDiffs[recipes[id].difficulty]) rec[id] = true;
+  });
+
+  return rec;
+}
+
+function renderSortBar() {
+  var bar = document.getElementById('sort-bar');
+  if (!bar) return;
+  var modes = [
+    { value: 'custom', label: '🔄 自定义' },
+    { value: 'rating', label: '⭐ 评分' },
+    { value: 'difficulty', label: '📊 难度' },
+    { value: 'time', label: '⏱ 用时' },
+  ];
+  bar.innerHTML = modes.map(function(m) {
+    return '<span class="sort-pill' + (sortMode === m.value ? ' active' : '') + '" data-sort="' + m.value + '">' + m.label + '</span>';
+  }).join('');
+
+  bar.querySelectorAll('.sort-pill').forEach(function(pill) {
+    pill.addEventListener('click', function() {
+      var newMode = pill.dataset.sort;
+      if (newMode === sortMode) return;
+      if (newMode === 'custom') {
+        recipeOrder = getSortedIds();
+      }
+      sortMode = newMode;
+      saveSortPrefs();
+      renderHome();
+    });
+  });
+  setTimeout(function() {
+    updateScrollArrows('sort-bar', 'sort-arrow-l', 'sort-arrow-r');
+  }, 50);
+}
+
+var TAG_LABELS = ['快速', '下饭', '荤菜', '海鲜', '主食', '汤羹', '凉菜', '早餐', '宴客', '减脂', '川菜', '粤菜', '鲁菜'];
+
+// 标签栏/排序栏桌面端左右滚动
+function scrollBar(barId, delta) {
+  var bar = document.getElementById(barId);
+  if (!bar) return;
+  bar.scrollBy({ left: delta, behavior: 'smooth' });
+}
+
+function updateScrollArrows(barId, leftId, rightId) {
+  var bar = document.getElementById(barId);
+  var leftBtn = document.getElementById(leftId);
+  var rightBtn = document.getElementById(rightId);
+  if (!bar || !leftBtn || !rightBtn) return;
+  leftBtn.disabled = bar.scrollLeft <= 2;
+  rightBtn.disabled = bar.scrollLeft + bar.clientWidth >= bar.scrollWidth - 2;
+}
+
+function renderTagBar() {
+  var bar = document.getElementById('tag-bar');
+  if (!bar) return;
+  bar.innerHTML = '<span class="sort-pill' + (!selectedTag ? ' active' : '') + '" data-tag="">全部</span>' +
+    TAG_LABELS.map(function(t) {
+      return '<span class="sort-pill' + (selectedTag === t ? ' active' : '') + '" data-tag="' + t + '">' + t + '</span>';
+    }).join('');
+
+  bar.querySelectorAll('.sort-pill').forEach(function(pill) {
+    pill.addEventListener('click', function() {
+      selectedTag = pill.dataset.tag;
+      renderHome();
+    });
+  });
+  // 渲染后更新滚动箭头
+  setTimeout(function() {
+    updateScrollArrows('tag-bar', 'tag-arrow-l', 'tag-arrow-r');
+  }, 50);
+}
+
+function moveRecipe(id, direction) {
+  var idx = recipeOrder.indexOf(id);
+  if (idx < 0) return;
+  var newIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (newIdx < 0 || newIdx >= recipeOrder.length) return;
+  var tmp = recipeOrder[idx];
+  recipeOrder[idx] = recipeOrder[newIdx];
+  recipeOrder[newIdx] = tmp;
+  saveSortPrefs();
+  renderHome();
+}
+
+var selectedTag = '';
+
+function renderHome() {
+  var container = document.getElementById('recipe-list');
+  var ids = getSortedIds();
+  var emptyMsg = document.getElementById('empty-home-msg');
+  var recommended = getRecommendedIds();
+
+  renderTagBar();
+
+  // 标签筛选
+  if (selectedTag) {
+    ids = ids.filter(function(id) {
+      var r = recipes[id];
+      return (r.tags || []).indexOf(selectedTag) !== -1;
+    });
+  }
+
+  // 搜索过滤
+  var searchInput = document.getElementById('home-search');
+  var countEl = document.getElementById('home-search-count');
+  var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  var allCount = ids.length;
+  if (query) {
+    ids = ids.filter(function(id) {
+      var r = recipes[id];
+      var inTags = (r.tags || []).some(function(t) { return t.toLowerCase().indexOf(query) !== -1; });
+      return (r.name || '').toLowerCase().indexOf(query) !== -1 ||
+             (r.emoji || '').indexOf(query) !== -1 ||
+             (r.difficulty || '').indexOf(query) !== -1 ||
+             inTags;
+    });
+    if (countEl) {
+      countEl.style.display = 'block';
+      countEl.textContent = '找到 ' + ids.length + ' 道（共 ' + allCount + ' 道）';
+    }
+  } else {
+    if (countEl) countEl.style.display = 'none';
+  }
+
+  renderSortBar();
+
+  if (ids.length === 0) {
+    container.innerHTML = '';
+    emptyMsg.style.display = 'block';
+
+    if (query) {
+      // 搜索无结果 → 显示 AI 生成入口
+      emptyMsg.innerHTML = '<div class="recipe-card" onclick="createRecipeFromSearch(\'' + escAttr(query) + '\')" style="display:block; text-align:center; padding:28px 20px;">' +
+        '<div style="font-size:44px; margin-bottom:8px;">🤖</div>' +
+        '<div style="font-size:16px; font-weight:600; margin-bottom:4px;">AI 帮我写「' + escHtml(query) + '」</div>' +
+        '<div style="font-size:12px; color:var(--text-muted);">没有找到这道菜，点此让 AI 帮你创建</div>' +
+        '</div>';
+    } else {
+      emptyMsg.innerHTML = '<p style="color:var(--text-muted); font-size:12px;">暂无菜谱，点右上角 ⚙️ 添加</p>';
+    }
+    return;
+  }
+
+  emptyMsg.style.display = 'none';
+  if (emptyMsg.innerHTML !== '' && emptyMsg.innerHTML.indexOf('暂无菜谱') === -1) {
+    emptyMsg.innerHTML = '';
+  }
+  container.innerHTML = ids.map(function(id, index) {
+    var r = recipes[id];
+    var emoji = r.emoji || '🍽️';
+    var avg = getAvgRating(id);
+    var count = getRatingCount(id);
+
+    var ratingHtml = count > 0
+      ? '<span class="avg-rating">⭐ ' + avg.toFixed(1) + '</span>'
+      : '';
+    var recHtml = recommended[id]
+      ? '<span class="rec-badge">👨‍🍳 推荐</span>'
+      : '';
+
+    var arrowsHtml = '';
+    if (sortMode === 'custom') {
+      arrowsHtml = '<div class="reorder-btns">' +
+        '<button class="reorder-arrow"' + (index === 0 ? ' disabled' : '') + ' data-action="up" data-id="' + id + '">▲</button>' +
+        '<button class="reorder-arrow"' + (index === ids.length - 1 ? ' disabled' : '') + ' data-action="down" data-id="' + id + '">▼</button>' +
+        '</div>';
+    }
+
+    return '<div class="recipe-card" data-recipe="' + id + '">' +
+      '<div class="recipe-emoji">' + emoji + '</div>' +
+      '<div class="recipe-info">' +
+        '<div class="recipe-name">' + escHtml(r.name) + recHtml + ratingHtml + '</div>' +
+        '<div class="recipe-meta">' +
+          '<span>⏱ ' + escHtml(r.time || '?') + '</span>' +
+          '<span class="badge">' + escHtml(r.difficulty || '家常') + '</span>' +
+          '<span>' + (r.steps || []).length + '步</span>' +
+          ((r.tags||[]).length > 0 ? '<span class="badge" style="background:#f0fdf4;color:#166534;">' + escHtml(r.tags[0]) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      arrowsHtml +
+    '</div>';
+  }).join('');
+
+  // Card click → enter prep
+  container.querySelectorAll('.recipe-card').forEach(function(card) {
+    card.addEventListener('click', function(e) {
+      if (e.target.closest('.reorder-arrow')) return;
+      currentRecipeId = card.dataset.recipe;
+      currentRecipe = recipes[currentRecipeId];
+      renderPrep();
+      goScreen('prep');
+    });
+  });
+
+  // Reorder arrows
+  if (sortMode === 'custom') {
+    container.querySelectorAll('.reorder-arrow').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        moveRecipe(btn.dataset.id, btn.dataset.action);
+      });
+    });
+  }
+
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escAttr(s) {
+  if (!s) return '';
+  return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+}
+
+// 搜索无结果 → 跳转编辑器并用 AI 生成
+function createRecipeFromSearch(query) {
+  openRecipeEditor(null);
+  // 等待 DOM 更新后填入菜名并触发 AI
+  setTimeout(function() {
+    document.getElementById('edit-name').value = query;
+    generateRecipeWithAI();
+  }, 200);
+}
+
+// ==================== 备菜页 ====================
+let currentRecipeId = null;
+let currentRecipe = null;
+
+function renderPrep() {
+  const r = currentRecipe;
+  if (!r) return;
+
+  document.getElementById('prep-header').innerHTML = `
+    <div class="recipe-emoji">${r.emoji || '🍽️'}</div>
+    <h2>${escHtml(r.name)}</h2>
+    <div class="recipe-meta" style="justify-content:center;">
+      <span>⏱ ${escHtml(r.time||'?')}</span>
+      <span class="badge">${escHtml(r.difficulty||'家常')}</span>
+    </div>
+  `;
+
+  const ingList = document.getElementById('ingredients-list');
+  ingList.innerHTML = (r.ingredients || []).map((ing, i) => `
+    <div class="ingredient-item" onclick="this.classList.toggle('checked'); updateStartBtn();">
+      <div class="ing-checkbox">✓</div>
+      <span class="ing-name">${escHtml(ing.name)}</span>
+      <span class="ing-amount">${escHtml(ing.amount)}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('tools-list').innerHTML = (r.tools || []).map(t =>
+    `<span style="background:var(--card); padding:6px 12px; border-radius:20px; font-size:13px; box-shadow:var(--shadow);">${escHtml(t)}</span>`
+  ).join('');
+
+  document.getElementById('btn-start-cook').disabled = true;
+}
+
+function updateStartBtn() {
+  const items = document.querySelectorAll('#ingredients-list .ingredient-item');
+  const allChecked = [...items].every(item => item.classList.contains('checked'));
+  document.getElementById('btn-start-cook').disabled = !allChecked;
+}
+
+document.getElementById('btn-start-cook').addEventListener('click', () => {
+  cookingStep = 0;
+  stopTimer();
+  renderCookingStep();
+  goScreen('cook');
+});
+
+// ==================== 备菜滑动一键备齐 ====================
+var prepSwipeStartX = 0;
+var prepSwipeActive = false;
+
+(function initPrepSwipe() {
+  var list = document.getElementById('ingredients-list');
+  if (!list) return;
+
+  list.addEventListener('touchstart', function(e) {
+    if (prepMode !== 'swipe') return;
+    prepSwipeStartX = e.touches[0].clientX;
+    prepSwipeActive = true;
+  }, { passive: true });
+
+  list.addEventListener('touchend', function(e) {
+    if (!prepSwipeActive || prepMode !== 'swipe') return;
+    prepSwipeActive = false;
+    var dx = e.changedTouches[0].clientX - prepSwipeStartX;
+    if (dx > 60) {
+      // 右滑 → 一键备齐
+      var items = document.querySelectorAll('#ingredients-list .ingredient-item');
+      var allChecked = true;
+      items.forEach(function(item) { if (!item.classList.contains('checked')) allChecked = false; });
+      if (!allChecked) {
+        items.forEach(function(item) { item.classList.add('checked'); });
+        updateStartBtn();
+        if (navigator.vibrate) navigator.vibrate(30);
+      }
+    }
+  });
+})();
+
+// ==================== 长按一键备齐 ====================
+var checkAllTimer = null;
+var checkAllActive = false;
+
+function startCheckAll(e) {
+  if (checkAllActive) return;
+  var items = document.querySelectorAll('#ingredients-list .ingredient-item');
+  if (items.length === 0) return;
+
+  // 如果已经全部打勾了，直接跳过
+  var allChecked = true;
+  items.forEach(function(item) { if (!item.classList.contains('checked')) allChecked = false; });
+  if (allChecked) return;
+
+  checkAllActive = true;
+  var progress = document.getElementById('check-all-progress');
+  var text = document.getElementById('check-all-text');
+  if (progress) { progress.style.width = '0%'; progress.style.transition = 'none'; }
+  if (text) text.textContent = '按住别松...';
+
+  checkAllTimer = setTimeout(function() {
+    // 一键打勾所有食材
+    items.forEach(function(item) { item.classList.add('checked'); });
+    updateStartBtn();
+    if (progress) { progress.style.width = '100%'; progress.style.transition = 'width 0.15s'; }
+    if (text) text.textContent = '✅ 已全部备齐！';
+    checkAllActive = false;
+    checkAllTimer = null;
+
+    // 震动反馈（如果设备支持）
+    if (navigator.vibrate) navigator.vibrate(30);
+
+    // 1秒后恢复按钮文字
+    setTimeout(function() {
+      if (text) text.textContent = '👆 长按一键备齐';
+      if (progress) { progress.style.width = '0%'; progress.style.transition = 'none'; }
+    }, 1200);
+  }, 600);
+}
+
+function cancelCheckAll() {
+  if (checkAllTimer) {
+    clearTimeout(checkAllTimer);
+    checkAllTimer = null;
+  }
+  checkAllActive = false;
+  var progress = document.getElementById('check-all-progress');
+  var text = document.getElementById('check-all-text');
+  if (progress) { progress.style.width = '0%'; progress.style.transition = 'none'; }
+  if (text) text.textContent = '👆 长按一键备齐';
+}
+
+// 绑定事件
+(function() {
+  var btn = document.getElementById('btn-check-all');
+  if (!btn) return;
+
+  // 触摸事件（手机）
+  btn.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    startCheckAll();
+  }, { passive: false });
+  btn.addEventListener('touchend', cancelCheckAll);
+  btn.addEventListener('touchcancel', cancelCheckAll);
+
+  // 鼠标事件（电脑）
+  btn.addEventListener('mousedown', startCheckAll);
+  btn.addEventListener('mouseup', cancelCheckAll);
+  btn.addEventListener('mouseleave', cancelCheckAll);
+})();
+
+// ==================== 做菜页 ====================
+let cookingStep = 0;
+let timerSeconds = 0;
+let timerRemaining = 0;
+let timerInterval = null;
+
+function goPrep() {
+  stopTimer();
+  stopSpeak();
+  goScreen('prep');
+}
+
+function renderCookingStep() {
+  const r = currentRecipe;
+  if (!r || !r.steps) return;
+  const step = r.steps[cookingStep];
+  const total = r.steps.length;
+
+  document.getElementById('cooking-title').textContent = r.name;
+  document.getElementById('step-counter').textContent = `${cookingStep + 1}/${total}`;
+  document.getElementById('progress-fill').style.width = `${((cookingStep + 1) / total) * 100}%`;
+  document.getElementById('step-number').textContent = `第 ${cookingStep + 1} 步`;
+  document.getElementById('step-text').textContent = step.text || '';
+
+  const tipEl = document.getElementById('step-tip');
+  if (step.tip) {
+    tipEl.style.display = 'inline-block';
+    tipEl.textContent = '💡 ' + step.tip;
+  } else {
+    tipEl.style.display = 'none';
+  }
+
+  const timerBox = document.getElementById('timer-box');
+  stopTimer();
+  if ((step.time || 0) > 0) {
+    timerBox.style.display = 'flex';
+    timerSeconds = step.time;
+    timerRemaining = step.time;
+    updateTimerDisplay();
+    document.getElementById('timer-label').textContent = '建议时间';
+    document.getElementById('timer-btn').textContent = '开始计时';
+    document.getElementById('timer-btn').classList.remove('running');
+    document.getElementById('timer-display').classList.remove('warning');
+    // 自动模式：切换步骤后立刻开始倒计时
+    if (timerAutoMode === 'auto') {
+      setTimeout(function() { toggleTimer(); }, 300);
+    }
+  } else {
+    timerBox.style.display = 'none';
+  }
+
+  document.getElementById('btn-prev').disabled = cookingStep === 0;
+  const btnNext = document.getElementById('btn-next');
+  if (cookingStep === total - 1) {
+    btnNext.textContent = '🎉 完成！';
+    btnNext.classList.add('finish');
+  } else {
+    btnNext.textContent = '下一步 →';
+    btnNext.classList.remove('finish');
+  }
+
+  // 卡片弹入动画
+  const card = document.getElementById('step-card');
+  card.style.transform = 'scale(1.02)';
+  card.style.opacity = '0.7';
+  requestAnimationFrame(() => {
+    card.style.transform = 'scale(1)';
+    card.style.opacity = '1';
+  });
+
+  document.getElementById('step-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  // 更新 AI 助手上下文
+  updateChatContext();
+
+  // 语音播报当前步骤
+  if (step && step.text) {
+    speakStep(step.text);
+  }
+  // 滑动指示
+  var swipeHint = document.getElementById('step-card');
+  if (swipeHint) swipeHint.dataset.swipeReady = '1';
+}
+
+// ==================== 滑动切换步骤 ====================
+var swipeStartX = 0;
+var swipeStartY = 0;
+var swipeOffsetX = 0;
+var swipeActive = false;
+
+(function initSwipe() {
+  var card = document.getElementById('step-card');
+  if (!card) return;
+
+  card.addEventListener('touchstart', function(e) {
+    swipeStartX = e.touches[0].clientX;
+    swipeStartY = e.touches[0].clientY;
+    swipeOffsetX = 0;
+    swipeActive = true;
+    card.classList.add('swiping');
+  }, { passive: true });
+
+  card.addEventListener('touchmove', function(e) {
+    if (!swipeActive) return;
+    var dx = e.touches[0].clientX - swipeStartX;
+    var dy = e.touches[0].clientY - swipeStartY;
+    // Only horizontal swipe (ignore vertical scroll)
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+      e.preventDefault();
+      swipeOffsetX = dx;
+      // Add resistance at boundaries
+      if ((cookingStep === 0 && dx > 0) || (currentRecipe && currentRecipe.steps && cookingStep >= currentRecipe.steps.length - 1 && dx < 0)) {
+        swipeOffsetX = dx * 0.3;
+      }
+      card.style.transform = 'translateX(' + swipeOffsetX + 'px)';
+      card.style.opacity = Math.max(0.5, 1 - Math.abs(dx) / 400);
+    }
+  }, { passive: false });
+
+  card.addEventListener('touchend', function() {
+    if (!swipeActive) return;
+    swipeActive = false;
+    card.classList.remove('swiping');
+    card.classList.add('animating');
+
+    if (Math.abs(swipeOffsetX) > 50) {
+      if (swipeOffsetX < -50) {
+        nextStep();
+      } else if (swipeOffsetX > 50) {
+        prevStep();
+      }
+    }
+
+    // Reset card position
+    card.style.transform = '';
+    card.style.opacity = '';
+    setTimeout(function() {
+      card.classList.remove('animating');
+    }, 300);
+  });
+})();
+
+function nextStep() {
+  const r = currentRecipe;
+  if (!r || !r.steps) return;
+  if (cookingStep < r.steps.length - 1) {
+    cookingStep++;
+    renderCookingStep();
+  } else {
+    stopTimer();
+    document.getElementById('done-title').textContent = '太棒了！🎉';
+    document.getElementById('done-desc').textContent = '你成功完成了「' + r.name + '」';
+    renderRatingWidget(currentRecipeId);
+    goScreen('done');
+  }
+}
+
+// ==================== 评分组件 ====================
+let currentRatingValue = 0;
+let currentRatingLocked = false;
+
+function renderRatingWidget(recipeId) {
+  var container = document.getElementById('star-rating');
+  var hint = document.getElementById('rating-hint');
+  if (!container) return;
+
+  currentRatingValue = 0;
+  currentRatingLocked = false;
+  if (hint) hint.textContent = '点击星星打分';
+
+  container.innerHTML = '';
+  for (var n = 1; n <= 5; n++) {
+    var btn = document.createElement('button');
+    btn.className = 'star-btn';
+    btn.textContent = '★';
+    btn.setAttribute('data-rating', n);
+    btn.addEventListener('click', function() {
+      if (currentRatingLocked) return;
+      currentRatingLocked = true;
+      currentRatingValue = parseInt(this.dataset.rating);
+      if (!ratings[recipeId]) ratings[recipeId] = [];
+      ratings[recipeId].push(currentRatingValue);
+      saveRatings();
+      fillStars(currentRatingValue);
+      var allStars = container.querySelectorAll('.star-btn');
+      allStars.forEach(function(s) { s.classList.add('readonly'); });
+      if (hint) {
+        var msgs = ['下次加油！', '再接再厉！', '还不错~', '很好吃！', '完美！下次还做！'];
+        hint.textContent = '✓ ' + msgs[currentRatingValue - 1];
+      }
+    });
+    btn.addEventListener('mouseenter', function() {
+      if (!currentRatingLocked) fillStars(parseInt(this.dataset.rating));
+    });
+    btn.addEventListener('mouseleave', function() {
+      if (!currentRatingLocked) fillStars(currentRatingValue);
+    });
+    container.appendChild(btn);
+  }
+}
+
+function fillStars(n) {
+  var stars = document.querySelectorAll('#star-rating .star-btn');
+  stars.forEach(function(s, i) {
+    if (i < n) s.classList.add('filled');
+    else s.classList.remove('filled');
+  });
+}
+
+function goHomeFromDone() {
+  goScreen('home');
+}
+
+function prevStep() {
+  if (cookingStep > 0) {
+    cookingStep--;
+    renderCookingStep();
+  }
+}
+
+// ==================== 计时器 ====================
+function updateTimerDisplay() {
+  const min = Math.floor(timerRemaining / 60);
+  const sec = timerRemaining % 60;
+  document.getElementById('timer-display').textContent =
+    String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+}
+
+function toggleTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    document.getElementById('timer-btn').textContent = '继续计时';
+    document.getElementById('timer-btn').classList.remove('running');
+  } else {
+    if (timerRemaining <= 0) timerRemaining = timerSeconds;
+    timerInterval = setInterval(() => {
+      timerRemaining--;
+      updateTimerDisplay();
+      updateFloatingTimer();
+      if (timerRemaining <= 10) {
+        document.getElementById('timer-display').classList.add('warning');
+      }
+      if (timerRemaining <= 0) {
+        stopTimer();
+        try { beep(); } catch(e) {}
+        // 语音提醒
+        if (voiceEnabled) {
+          try {
+            var u = new SpeechSynthesisUtterance('时间到');
+            u.lang = 'zh-CN'; u.rate = 0.9;
+            var v = getSelectedVoice();
+            if (v) u.voice = v;
+            speechSynthesis.speak(u);
+          } catch(e2) {}
+        }
+        // 视觉提示：计时器区域闪烁，而非阻断式弹窗
+        var display = document.getElementById('timer-display');
+        var label = document.getElementById('timer-label');
+        if (label) label.textContent = '⏰ 时间到！';
+        if (display) {
+          display.style.animation = 'pulse 0.4s ease 3';
+          setTimeout(function() { display.style.animation = ''; }, 1200);
+        }
+      }
+    }, 1000);
+    document.getElementById('timer-btn').textContent = '暂停计时';
+    document.getElementById('timer-btn').classList.add('running');
+    updateFloatingTimer();
+  }
+}
+
+function resetTimer() {
+  stopTimer();
+  timerRemaining = timerSeconds;
+  updateTimerDisplay();
+  document.getElementById('timer-btn').textContent = '开始计时';
+  document.getElementById('timer-btn').classList.remove('running');
+  document.getElementById('timer-display').classList.remove('warning');
+}
+
+function stopTimer() {
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  updateFloatingTimer();
+}
+
+function updateFloatingTimer() {
+  var floater = document.getElementById('floating-timer');
+  if (!floater) return;
+  var onCookPage = document.getElementById('screen-cook').classList.contains('active');
+  var onDonePage = document.getElementById('screen-done').classList.contains('active');
+
+  // 做菜页：不显示（有完整计时器）
+  // 完成页：不显示（做菜流程已结束）
+  if (onCookPage || onDonePage || !currentRecipe) {
+    floater.style.display = 'none';
+    floater.classList.remove('warn');
+    return;
+  }
+
+  // 不在做菜页但有进行中的菜谱 → 显示悬浮窗
+  floater.style.display = 'flex';
+  document.getElementById('floating-timer-name').textContent =
+    currentRecipe ? currentRecipe.name : '';
+
+  if (timerInterval && timerRemaining > 0) {
+    // 计时器在跑：显示实时倒计时
+    var min = Math.floor(timerRemaining / 60);
+    var sec = timerRemaining % 60;
+    document.getElementById('floating-timer-text').textContent =
+      String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    floater.classList.toggle('warn', timerRemaining <= 10);
+  } else if (timerRemaining <= 0 && timerSeconds > 0) {
+    // 时间到了：显示"时间到"状态
+    document.getElementById('floating-timer-text').textContent = '⏰ 时间到';
+    floater.classList.add('warn');
+  } else {
+    // 暂停/未启动：显示暂停状态
+    document.getElementById('floating-timer-text').textContent = '⏸ 已暂停';
+    floater.classList.remove('warn');
+  }
+}
+
+function beep() {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var now = ctx.currentTime;
+
+    // 餐铃 "叮" 一声：两个频率叠加模拟金属共振
+    [1800, 2400].forEach(function(freq, i) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      // 快速衰减：起音清脆，余韵约0.8秒
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + i * 0.03); // 第二个音稍延迟，模拟泛音
+      osc.stop(now + 0.9);
+    });
+  } catch(e) {}
+}
+
+// ==================== 语音播报 ====================
+var voiceEnabled = true;
+var selectedVoiceName = '';
+var currentUtterance = null;
+
+function loadVoicePref() {
+  var saved = localStorage.getItem('zhangchu_voice');
+  if (saved === 'off') voiceEnabled = false;
+  selectedVoiceName = localStorage.getItem('zhangchu_voice_name') || '';
+  updateVoiceUI();
+}
+loadVoicePref();
+
+function updateVoiceUI() {
+  var toggle = document.getElementById('voice-toggle');
+  if (!toggle) return;
+  if (voiceEnabled) {
+    toggle.className = 'voice-btn on';
+    toggle.textContent = '🔊 语音播报中';
+  } else {
+    toggle.className = 'voice-btn off';
+    toggle.textContent = '🔇 语音已关闭';
+  }
+}
+
+function toggleVoice() {
+  voiceEnabled = !voiceEnabled;
+  localStorage.setItem('zhangchu_voice', voiceEnabled ? 'on' : 'off');
+  updateVoiceUI();
+
+  if (!voiceEnabled) {
+    stopSpeak();
+  } else {
+    replayStep();
+  }
+}
+
+function stopSpeak() {
+  // 无条件取消所有待播报内容，防止上一步没念完继续念
+  speechSynthesis.cancel();
+  if (currentUtterance) {
+    currentUtterance.onend = null;
+    currentUtterance = null;
+  }
+}
+
+function getSelectedVoice() {
+  var voices = speechSynthesis.getVoices();
+  if (!selectedVoiceName) {
+    // No preference: pick best Chinese voice
+    var zhVoices = voices.filter(function(v) { return v.lang.indexOf('zh-') !== -1; });
+    // Prefer female-sounding names
+    for (var i = 0; i < zhVoices.length; i++) {
+      var n = zhVoices[i].name.toLowerCase();
+      if (n.indexOf('xiaoxiao') !== -1) return zhVoices[i];
+    }
+    for (var i = 0; i < zhVoices.length; i++) {
+      var n = zhVoices[i].name.toLowerCase();
+      if (n.indexOf('female') !== -1 || n.indexOf('yaoyao') !== -1 ||
+          n.indexOf('tingting') !== -1 || n.indexOf('meijia') !== -1) {
+        return zhVoices[i];
+      }
+    }
+    return zhVoices.length > 0 ? zhVoices[0] : (voices.length > 0 ? voices[0] : null);
+  }
+  // Find by name
+  for (var j = 0; j < voices.length; j++) {
+    if (voices[j].name === selectedVoiceName) return voices[j];
+  }
+  // Voice not found (maybe changed device), fall back
+  return getChineseFallback();
+}
+
+function getChineseFallback() {
+  var voices = speechSynthesis.getVoices();
+  for (var i = 0; i < voices.length; i++) {
+    if (voices[i].lang.indexOf('zh-CN') !== -1) return voices[i];
+  }
+  for (var i = 0; i < voices.length; i++) {
+    if (voices[i].lang.indexOf('zh-') !== -1) return voices[i];
+  }
+  return voices.length > 0 ? voices[0] : null;
+}
+
+function speakStep(text) {
+  if (!voiceEnabled) return;
+  if (!text) return;
+
+  stopSpeak();
+
+  var cleanText = text.replace(/[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FEFF}]/gu, '').trim();
+  if (!cleanText) return;
+
+  try {
+    var utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'zh-CN';
+    utterance.rate = 0.9;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    var voice = getSelectedVoice();
+    if (voice) utterance.voice = voice;
+
+    currentUtterance = utterance;
+    utterance.onend = function() { currentUtterance = null; };
+    utterance.onerror = function() { currentUtterance = null; };
+
+    speechSynthesis.speak(utterance);
+  } catch(e) {
+    // Speech not supported, silently fail
+  }
+}
+
+function replayStep() {
+  var r = currentRecipe;
+  if (!r || !r.steps) return;
+  var step = r.steps[cookingStep];
+  if (step && step.text) {
+    speakStep(step.text);
+  }
+}
+
+// ==================== 音色选择器 ====================
+// 音色黑名单
+var voiceBlacklist = [];
+
+function loadVoiceBlacklist() {
+  try { voiceBlacklist = JSON.parse(localStorage.getItem('zhangchu_voice_blacklist')) || []; } catch(e) { voiceBlacklist = []; }
+}
+loadVoiceBlacklist();
+
+function saveVoiceBlacklist() {
+  localStorage.setItem('zhangchu_voice_blacklist', JSON.stringify(voiceBlacklist));
+}
+
+function isVoiceBlocked(voiceName) {
+  return voiceBlacklist.indexOf(voiceName) !== -1;
+}
+
+function blockVoice(voiceName) {
+  if (voiceBlacklist.indexOf(voiceName) === -1) {
+    voiceBlacklist.push(voiceName);
+    saveVoiceBlacklist();
+  }
+}
+
+function unblockVoice(voiceName) {
+  voiceBlacklist = voiceBlacklist.filter(function(n) { return n !== voiceName; });
+  saveVoiceBlacklist();
+}
+
+// 音色排序
+var voiceSortMode = 'default';
+
+function loadVoiceSort() {
+  voiceSortMode = localStorage.getItem('zhangchu_voice_sort') || 'default';
+}
+loadVoiceSort();
+
+function saveVoiceSort() {
+  localStorage.setItem('zhangchu_voice_sort', voiceSortMode);
+}
+
+function isFemaleVoice(name) {
+  return /female|yaoyao|tingting|meijia|xiaoxiao|xiaoyi|xiaomeng|xiaohan|xiaoxuan|xiaomo|xiaorui|xiaoqiu|xiaoshuang|yunxia/i.test(name.toLowerCase());
+}
+
+function isMaleVoice(name) {
+  return /male|kangkang|qiangqiang|yunyang|yunxi|yunfeng|yunjian|yundong/i.test(name.toLowerCase());
+}
+
+function sortVoices(voices) {
+  if (voiceSortMode === 'az') {
+    return voices.sort(function(a, b) {
+      var da = getVoiceDisplay(a);
+      var db = getVoiceDisplay(b);
+      return da.name.localeCompare(db.name, 'zh');
+    });
+  }
+  if (voiceSortMode === 'female') {
+    return voices.sort(function(a, b) {
+      var aF = isFemaleVoice(a.name) ? 0 : isMaleVoice(a.name) ? 2 : 1;
+      var bF = isFemaleVoice(b.name) ? 0 : isMaleVoice(b.name) ? 2 : 1;
+      if (aF !== bF) return aF - bF;
+      return a.name.localeCompare(b.name);
+    });
+  }
+  // default: female first, then alphabetical
+  return voices.sort(function(a, b) {
+    var aF = isFemaleVoice(a.name) ? 0 : 1;
+    var bF = isFemaleVoice(b.name) ? 0 : 1;
+    if (aF !== bF) return aF - bF;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function renderVoiceSortPills(containerId) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  var modes = [
+    { value: 'default', label: '推荐' },
+    { value: 'az', label: 'A-Z' },
+    { value: 'female', label: '女声优先' },
+  ];
+  container.innerHTML = modes.map(function(m) {
+    return '<span style="display:inline-block;padding:2px 8px;margin-right:4px;border-radius:10px;font-size:11px;cursor:pointer;' +
+      (voiceSortMode === m.value ? 'background:var(--orange);color:#fff;' : 'border:1px solid var(--border);color:var(--text-muted);') +
+      '" onclick="setVoiceSort(\'' + m.value + '\')">' + m.label + '</span>';
+  }).join('');
+}
+
+function setVoiceSort(mode) {
+  voiceSortMode = mode;
+  saveVoiceSort();
+  renderVoiceSortPills('voice-sort-pills');
+  renderVoiceSortPills('voice-admin-sort-pills');
+  renderVoiceListIfOpen();
+  if (document.getElementById('screen-admin-list').classList.contains('active')) {
+    renderVoiceManageList();
+  }
+}
+
+function renderVoiceListIfOpen() {
+  var overlay = document.getElementById('voice-modal-overlay');
+  if (overlay.classList.contains('show')) {
+    renderVoiceList();
+  }
+}
+
+function getVoiceList() {
+  var voices = speechSynthesis.getVoices();
+  // Chinese voices first, then a few good English ones
+  var zhVoices = [];
+  var enVoices = [];
+  var otherVoices = [];
+
+  voices.forEach(function(v) {
+    // 永久移除慧慧
+    if (v.name.toLowerCase().indexOf('huihui') !== -1) return;
+    // 过滤被屏蔽的音色
+    if (isVoiceBlocked(v.name)) return;
+    if (v.lang.indexOf('zh-') !== -1) zhVoices.push(v);
+    else if (v.lang.indexOf('en-') !== -1) enVoices.push(v);
+    else if (v.name.indexOf('Google') === -1) otherVoices.push(v);
+  });
+
+  zhVoices = sortVoices(zhVoices);
+
+  return zhVoices.concat(enVoices.slice(0, 2)).concat(otherVoices.slice(0, 3));
+}
+
+function openVoiceSelector() {
+  var overlay = document.getElementById('voice-modal-overlay');
+  overlay.classList.add('show');
+  renderVoiceSortPills('voice-sort-pills');
+  renderVoiceList();
+}
+
+function closeVoiceSelector(e) {
+  if (e && e.target !== document.getElementById('voice-modal-overlay')) return;
+  var overlay = document.getElementById('voice-modal-overlay');
+  overlay.classList.remove('show');
+  // Stop any preview speech
+  stopSpeak();
+}
+
+// 音色中文映射：技术名 → {昵称, 特点, 头像}
+var VOICE_PROFILES = {
+  'yaoyao':        { name: '瑶瑶', desc: '活泼甜美 · 女声', icon: '👧' },
+  'kangkang':      { name: '康康', desc: '沉稳大气 · 男声', icon: '👨' },
+  'tingting':      { name: '婷婷', desc: '清新自然 · 女声', icon: '👩' },
+  'meijia':        { name: '美佳', desc: '温柔台腔 · 女声', icon: '👩‍🦱' },
+  'xiaoxiao':      { name: '晓晓', desc: '清脆明亮 · 女声', icon: '👧' },
+  'yunyang':       { name: '云扬', desc: '阳光活力 · 男声', icon: '👦' },
+  'yunxi':         { name: '云希', desc: '温暖磁性 · 男声', icon: '👨‍🦱' },
+  'xiaoyi':        { name: '晓伊', desc: '软糯可爱 · 女声', icon: '👶' },
+  'xiaomeng':      { name: '晓梦', desc: '甜美少女 · 女声', icon: '👧' },
+  'xiaochen':      { name: '晓辰', desc: '知性稳重 · 女声', icon: '👩‍💼' },
+  'xiaohan':       { name: '晓涵', desc: '清脆少女 · 女声', icon: '👧' },
+  'xiaoxuan':      { name: '晓萱', desc: '温润柔和 · 女声', icon: '👩' },
+  'xiaomo':        { name: '晓墨', desc: '文艺淡雅 · 女声', icon: '👩‍🎨' },
+  'xiaorui':       { name: '晓睿', desc: '干练利落 · 女声', icon: '👩‍💻' },
+  'xiaoqiu':       { name: '晓秋', desc: '成熟亲切 · 女声', icon: '👩‍🦳' },
+  'xiaoshuang':    { name: '晓双', desc: '轻快俏皮 · 女声', icon: '👧' },
+  'yunfeng':       { name: '云枫', desc: '低沉浑厚 · 男声', icon: '🧔' },
+  'yunjian':       { name: '云健', desc: '运动阳光 · 男声', icon: '💪' },
+  'yunxia':        { name: '云夏', desc: '爽朗大方 · 女声', icon: '👩‍🌾' },
+  'yundong':       { name: '云东', desc: '成熟稳重 · 男声', icon: '👨‍💼' },
+  'qiangqiang':    { name: '强强', desc: '洪亮有力 · 男声', icon: '👨' },
+  'google':        { name: 'Google 普通话', desc: '标准清晰 · 女声', icon: '👩' },
+};
+
+function getVoiceDisplay(voice) {
+  var lname = voice.name.toLowerCase();
+  // Try to match known voices
+  var keys = Object.keys(VOICE_PROFILES);
+  for (var i = 0; i < keys.length; i++) {
+    if (lname.indexOf(keys[i]) !== -1) {
+      return VOICE_PROFILES[keys[i]];
+    }
+  }
+  // Unknown voice: generate from gender/lang
+  var isFemale = /female|girl|woman/i.test(lname);
+  var isMale = /male|boy|man/i.test(lname);
+  var isZh = voice.lang.indexOf('zh-') !== -1;
+
+  if (isZh) {
+    if (isFemale) return { name: voice.name, desc: '系统中文女声', icon: '👩' };
+    if (isMale) return { name: voice.name, desc: '系统中文男声', icon: '👨' };
+    return { name: voice.name, desc: '系统中文语音', icon: '🎙️' };
+  }
+  if (isFemale) return { name: voice.name, desc: '英文女声', icon: '👩' };
+  if (isMale) return { name: voice.name, desc: '英文男声', icon: '👨' };
+  return { name: voice.name, desc: voice.lang, icon: '🎙️' };
+}
+
+function renderVoiceList() {
+  var container = document.getElementById('voice-modal-list');
+  var voices = getVoiceList();
+
+  if (voices.length === 0) {
+    // 手机端语音可能需要一点时间加载，触发引擎并自动重试
+    container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);">⏳ 正在加载音色列表...<br><small>如果长时间未出现，请检查浏览器是否支持语音功能</small></div>';
+    // 尝试唤醒语音引擎（部分移动端需要先 speak 一次才会暴露 voice 列表）
+    try {
+      var wake = new SpeechSynthesisUtterance('');
+      wake.volume = 0; wake.rate = 1;
+      speechSynthesis.speak(wake);
+    } catch(e) {}
+    // voiceschanged 事件触发后会自动重新渲染
+    return;
+  }
+
+  container.innerHTML = voices.map(function(v) {
+    var isSelected = v.name === selectedVoiceName;
+    var display = getVoiceDisplay(v);
+
+    return '<div class="voice-option' + (isSelected ? ' selected' : '') + '" onclick="selectVoice(\'' + escHtml(v.name).replace(/'/g, "\\'") + '\')">' +
+      '<div class="voice-avatar">' + display.icon + '</div>' +
+      '<div class="voice-option-info">' +
+        '<div class="voice-option-name">' + escHtml(display.name) + '</div>' +
+        '<div class="voice-option-lang">' + escHtml(display.desc) + '</div>' +
+      '</div>' +
+      '<button class="voice-preview-btn" onclick="event.stopPropagation(); previewVoice(\'' + escHtml(v.name).replace(/'/g, "\\'") + '\')">▶ 试听</button>' +
+      (isSelected ? '<span class="voice-option-check">✓</span>' : '') +
+    '</div>';
+  }).join('');
+
+  if (!selectedVoiceName && voices.length > 0) {
+    container.insertAdjacentHTML('afterbegin',
+      '<div style="padding:8px 16px;font-size:11px;color:var(--text-muted);">未选择音色，已自动匹配最佳 👇</div>');
+  }
+
+  // 管理音色链接
+  container.insertAdjacentHTML('beforeend',
+    '<div style="text-align:center;padding:12px;border-top:1px solid var(--border);margin-top:8px;">' +
+    '<span style="font-size:12px;color:var(--orange);cursor:pointer;" onclick="closeVoiceSelector(); goScreen(\'admin-list\');">⚙️ 管理音色（屏蔽不喜欢的）→</span>' +
+    '</div>');
+}
+
+function previewVoice(voiceName) {
+  // 立刻打断当前所有播报
+  speechSynthesis.cancel();
+  currentUtterance = null;
+
+  var voices = speechSynthesis.getVoices();
+  var voice = null;
+  for (var i = 0; i < voices.length; i++) {
+    if (voices[i].name === voiceName) { voice = voices[i]; break; }
+  }
+  if (!voice) return;
+
+  var sample = '你好，我是掌厨的语音助手，做菜的时候我会一步步提醒你，让做饭变得更简单。';
+  try {
+    var u = new SpeechSynthesisUtterance(sample);
+    u.voice = voice;
+    u.lang = voice.lang;
+    u.rate = 0.95;
+    u.pitch = 1.0;
+    u.volume = 1.0;
+    speechSynthesis.speak(u);
+  } catch(e) {}
+}
+
+function selectVoice(voiceName) {
+  // 立刻停止所有播报
+  speechSynthesis.cancel();
+  currentUtterance = null;
+
+  selectedVoiceName = voiceName;
+  localStorage.setItem('zhangchu_voice_name', voiceName);
+  renderVoiceList();
+  // 静默关闭，不念任何话
+  setTimeout(function() {
+    closeVoiceSelector();
+  }, 300);
+}
+
+// ==================== 音色管理（后台） ====================
+function renderVoiceManageList() {
+  var container = document.getElementById('voice-manage-list');
+  var empty = document.getElementById('voice-manage-empty');
+  if (!container) return;
+
+  renderVoiceSortPills('voice-admin-sort-pills');
+
+  var allVoices = speechSynthesis.getVoices();
+  var zhVoices = allVoices.filter(function(v) { return v.lang.indexOf('zh-') !== -1; });
+  zhVoices = sortVoices(zhVoices);
+
+  if (zhVoices.length === 0) {
+    container.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+
+  if (empty) empty.style.display = 'none';
+
+  container.innerHTML = zhVoices.map(function(v) {
+    var display = getVoiceDisplay(v);
+    var blocked = isVoiceBlocked(v.name);
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;' +
+      (blocked ? 'opacity:0.35;' : '') + 'background:var(--card);border-radius:8px;">' +
+      '<span style="font-size:18px;">' + display.icon + '</span>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:13px;font-weight:600;">' + escHtml(display.name) + '</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);">' + escHtml(display.desc) + '</div>' +
+      '</div>' +
+      '<button class="btn btn-sm" style="font-size:11px;" onclick="event.stopPropagation(); previewVoice(\'' + escHtml(v.name).replace(/'/g, "\\'") + '\');">▶ 试听</button>' +
+      (blocked
+        ? '<button class="btn btn-sm" style="font-size:11px;" onclick="unblockVoice(\'' + escHtml(v.name).replace(/'/g, "\\'") + '\'); renderVoiceManageList();">恢复</button>'
+        : '<button class="btn btn-sm" style="font-size:11px;background:#fecaca;color:var(--red);" onclick="blockVoice(\'' + escHtml(v.name).replace(/'/g, "\\'") + '\'); renderVoiceManageList();">屏蔽</button>'
+      ) +
+    '</div>';
+  }).join('');
+
+  container.insertAdjacentHTML('beforeend',
+    '<p style="font-size:10px;color:var(--text-muted);margin-top:6px;">已屏蔽 ' + voiceBlacklist.length + ' 个音色，屏蔽后做菜页音色列表不再显示</p>');
+}
+
+// Preload voices
+if (typeof speechSynthesis !== 'undefined') {
+  // 触发语音引擎加载（部分手机浏览器需要先调用一次 getVoices）
+  speechSynthesis.getVoices();
+  speechSynthesis.onvoiceschanged = function() {
+    speechSynthesis.getVoices();
+    // 如果音色面板正打开着，刷新列表
+    var overlay = document.getElementById('voice-modal-overlay');
+    if (overlay && overlay.classList.contains('show')) {
+      renderVoiceList();
+    }
+    // 管理后台也刷新
+    if (document.getElementById('screen-admin-list') &&
+        document.getElementById('screen-admin-list').classList.contains('active')) {
+      renderVoiceManageList();
+    }
+  };
+}
+
+// ==================== 多标签同步 ====================
+window.addEventListener('storage', function(e) {
+  // 菜谱或设置被其他标签页改了，刷新数据
+  if (e.key && e.key.indexOf('zhangchu_') === 0) {
+    if (e.key === STORAGE_KEY) {
+      recipes = loadRecipes();
+      if (document.getElementById('screen-home').classList.contains('active')) renderHome();
+    }
+    if (e.key === RATINGS_KEY) loadRatings();
+    if (e.key === SORT_MODE_KEY || e.key === ORDER_KEY) { loadSortPrefs(); if (document.getElementById('screen-home').classList.contains('active')) renderHome(); }
+  }
+});
+
+// ==================== 键盘控制 ====================
+document.addEventListener('keydown', (e) => {
+  if (!document.getElementById('screen-cook').classList.contains('active')) return;
+  switch (e.key) {
+    case 'ArrowRight': nextStep(); break;
+    case 'ArrowLeft': prevStep(); break;
+    case ' ':
+      e.preventDefault();
+      if (document.getElementById('timer-box').style.display !== 'none') toggleTimer();
+      break;
+  }
+});
+
+// ==================== 管理后台：菜谱列表 ====================
+document.getElementById('btn-admin-entry').addEventListener('click', () => goScreen('admin-list'));
+
+function renderAdminList() {
+  var container = document.getElementById('admin-recipe-list');
+  var ids = Object.keys(recipes);
+
+  // 搜索过滤
+  var searchInput = document.getElementById('recipe-search');
+  var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  if (query) {
+    ids = ids.filter(function(id) {
+      var r = recipes[id];
+      var inTags = (r.tags || []).some(function(t) { return t.toLowerCase().indexOf(query) !== -1; });
+      return r.name.toLowerCase().indexOf(query) !== -1 ||
+             (r.emoji || '').indexOf(query) !== -1 ||
+             (r.difficulty || '').indexOf(query) !== -1 ||
+             inTags;
+    });
+  }
+
+  if (ids.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">' +
+      (query ? '🔍' : '📭') + '</div><p>' +
+      (query ? '没有找到「' + escHtml(query) + '」相关菜谱' : '还没有菜谱，点击下方按钮添加') + '</p></div>';
+    return;
+  }
+
+  container.innerHTML = ids.map(function(id) {
+    var r = recipes[id];
+    var name = escHtml(r.name);
+    // 搜索关键词高亮
+    if (query) {
+      var re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+      name = name.replace(re, '<mark style="background:#fef3c7;padding:0 2px;border-radius:2px;">$1</mark>');
+    }
+    return '<div class="admin-card">' +
+      '<div class="recipe-emoji">' + (r.emoji || '🍽️') + '</div>' +
+      '<div class="recipe-info">' +
+        '<div class="recipe-name">' + name + '</div>' +
+        '<div class="recipe-steps-count">' + (r.steps||[]).length + ' 步 · ' + escHtml(r.time||'?') + ' · ' + escHtml(r.difficulty||'') + '</div>' +
+      '</div>' +
+      '<div class="admin-card-actions">' +
+        (isCustomRecipe(id) ? '<button class="icon-btn" onclick="copyRecipeFeedback(\'' + id + '\')" title="复制菜谱反馈" style="font-size:16px;">📋</button>' : '') +
+        '<button class="icon-btn" onclick="openRecipeEditor(\'' + id + '\')" title="编辑">✏️</button>' +
+        '<button class="icon-btn danger" onclick="deleteRecipe(\'' + id + '\')" title="删除">🗑</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// 折叠设置面板
+function toggleSettings() {
+  var panel = document.getElementById('settings-panel');
+  var arrow = document.getElementById('settings-arrow');
+  if (!panel) return;
+  panel.classList.toggle('collapsed');
+  if (arrow) {
+    arrow.textContent = panel.classList.contains('collapsed') ? '▶' : '▼';
+  }
+}
+
+// ==================== 数据导出/导入（文件 + QR） ====================
+var DATA_KEYS = [
+  'zhangchu_recipes', 'zhangchu_ratings', 'zhangchu_sort_mode',
+  'zhangchu_recipe_order', 'zhangchu_api_key', 'zhangchu_voice',
+  'zhangchu_voice_name', 'zhangchu_voice_blacklist', 'zhangchu_voice_sort',
+  'zhangchu_prep_mode', 'zhangchu_timer_mode'
+];
+
+function buildBundle() {
+  var bundle = { v: 1, t: Date.now(), d: {} };
+  DATA_KEYS.forEach(function(key) {
+    var val = localStorage.getItem(key);
+    if (val !== null && val !== undefined) {
+      bundle.d[key] = val;
+    }
+  });
+  return bundle;
+}
+
+function restoreBundle(bundle) {
+  if (!bundle.d || typeof bundle.d !== 'object') throw new Error('格式错误');
+  // 版本检查：未来版本的数据不导入
+  if (bundle.v && bundle.v > 1) {
+    throw new Error('备份文件版本(' + bundle.v + ')高于当前支持版本(1)，请更新 App 后重试。');
+  }
+  var count = 0;
+  Object.keys(bundle.d).forEach(function(key) {
+    if (DATA_KEYS.indexOf(key) === -1) return;
+    localStorage.setItem(key, bundle.d[key]);
+    count++;
+  });
+  return count;
+}
+
+// ===== 文件导出 =====
+function exportData() {
+  var bundle = buildBundle();
+
+  // API Key 确认
+  if (bundle.d['zhangchu_api_key']) {
+    var key = bundle.d['zhangchu_api_key'];
+    if (!confirm('备份包含 API Key（' + key.slice(0, 5) + '...' + key.slice(-4) + '）。确定一起导出吗？\n点"取消"将跳过。')) {
+      delete bundle.d['zhangchu_api_key'];
+    }
+  }
+
+  var json = JSON.stringify(bundle);
+  var blob = new Blob([json], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var now = new Date();
+  var dateStr = now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
+  a.href = url;
+  a.download = '掌厨备份-' + dateStr + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ===== 文件导入 =====
+function importData(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  if (!confirm('⚠️ 导入数据将覆盖当前所有设置和评分。\n\n确定继续吗？')) {
+    input.value = ''; return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var bundle = JSON.parse(e.target.result);
+      var count = restoreBundle(bundle);
+      alert('✅ 已恢复 ' + count + ' 项数据！页面将刷新。');
+      location.reload();
+    } catch(err) {
+      alert('❌ 文件格式不正确');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// ===== QR 码导出 =====
+function exportQR() {
+  var bundle = buildBundle();
+  // API Key 确认
+  if (bundle.d['zhangchu_api_key']) {
+    var key = bundle.d['zhangchu_api_key'];
+    if (!confirm('二维码中包含 API Key（' + key.slice(0, 5) + '...' + key.slice(-4) + '）。确定包含吗？')) {
+      delete bundle.d['zhangchu_api_key'];
+    }
+  }
+
+  var json = JSON.stringify(bundle);
+  // LZString 压缩
+  var compressed = '';
+  try {
+    compressed = LZString.compressToBase64(json);
+  } catch(e) {
+    compressed = json;
+  }
+
+  var overlay = document.getElementById('qr-overlay');
+  var container = document.getElementById('qr-container');
+  var sizeInfo = document.getElementById('qr-size-info');
+
+  container.innerHTML = '';
+
+  if (compressed.length > 2800) {
+    container.innerHTML = '<div style="padding:20px; color:var(--text-muted); font-size:13px;">' +
+      '⚠️ 数据量较大（' + Math.round(compressed.length * 0.75) + ' 字节），二维码可能无法扫描。<br><br>' +
+      '建议使用「📤 导出文件」+「📥 导入文件」方式迁移。</div>';
+    if (sizeInfo) sizeInfo.textContent = '';
+  } else {
+    try {
+      new QRCode(container, {
+        text: compressed,
+        width: 250, height: 250,
+        colorDark: '#1c1917', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.L
+      });
+      if (sizeInfo) sizeInfo.textContent = '数据量：' + Math.round(compressed.length * 0.75) + ' 字节';
+    } catch(e) {
+      container.innerHTML = '<div style="padding:20px; color:var(--red);">二维码生成失败，请用文件方式迁移。</div>';
+    }
+  }
+
+  overlay.classList.add('show');
+}
+
+function closeQR() {
+  document.getElementById('qr-overlay').classList.remove('show');
+}
+
+// ===== QR 码扫码导入 =====
+var html5QrScanner = null;
+
+function startScan() {
+  var overlay = document.getElementById('scan-overlay');
+  overlay.classList.add('show');
+
+  var readerEl = document.getElementById('qr-reader');
+  readerEl.innerHTML = '';
+  var statusEl = document.getElementById('scan-status');
+  if (statusEl) statusEl.textContent = '正在启动摄像头...';
+
+  try {
+    html5QrScanner = new Html5Qrcode('qr-reader');
+    html5QrScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      function(decodedText) {
+        // 扫码成功
+        if (html5QrScanner) {
+          html5QrScanner.stop().then(function() {
+            html5QrScanner = null;
+          }).catch(function() { html5QrScanner = null; });
+        }
+        document.getElementById('scan-overlay').classList.remove('show');
+        processQRData(decodedText);
+      },
+      function() { /* 扫描中 */ }
+    ).then(function() {
+      if (statusEl) statusEl.textContent = '将二维码对准框内';
+    }).catch(function(err) {
+      if (statusEl) statusEl.textContent = '摄像头启动失败：' + (err.message || err) + '（点击空白处关闭）';
+      // 启动失败时释放资源，确保 stopScan 不会卡住
+      html5QrScanner = null;
+    });
+  } catch(e) {
+    if (statusEl) statusEl.textContent = '扫码功能初始化失败，请用文件导入方式。（点击空白处关闭）';
+    html5QrScanner = null;
+  }
+}
+
+function stopScan() {
+  // 无论 scanner 状态如何，先关 overlay
+  document.getElementById('scan-overlay').classList.remove('show');
+  // 再尝试停止（可能已经失败/未启动，忽略错误）
+  if (html5QrScanner) {
+    try {
+      html5QrScanner.stop().catch(function() {});
+    } catch(e) {}
+    html5QrScanner = null;
+  }
+}
+
+function processQRData(text) {
+  if (!confirm('检测到数据备份，是否导入？\n\n⚠️ 将覆盖当前所有设置和评分。')) return;
+
+  try {
+    var json;
+    // 尝试 LZString 解压
+    try {
+      json = LZString.decompressFromBase64(text);
+    } catch(e) {
+      json = text;
+    }
+    var bundle = JSON.parse(json);
+    var count = restoreBundle(bundle);
+    alert('✅ 已恢复 ' + count + ' 项数据！页面将刷新。');
+    location.reload();
+  } catch(err) {
+    alert('❌ 二维码数据格式不正确，请确认来源。');
+  }
+}
+
+// 切换备菜方式（修复此前缺失的函数）
+function togglePrepMode() {
+  prepMode = prepMode === 'longpress' ? 'swipe' : 'longpress';
+  localStorage.setItem('zhangchu_prep_mode', prepMode);
+  applyPrepMode();
+}
+
+function deleteRecipe(id) {
+  const r = recipes[id];
+  if (!r) return;
+  if (!confirm('确定要删除「' + r.name + '」吗？\n\n此操作不可恢复！')) return;
+  delete recipes[id];
+  delete ratings[id];
+  saveRatings();
+  recipeOrder = recipeOrder.filter(function(oid) { return oid !== id; });
+  saveSortPrefs();
+  saveRecipes(recipes);
+  renderAdminList();
+  renderHome();
+}
+
+// 判断是否为用户自创菜谱（不在默认菜谱中）
+function isCustomRecipe(id) {
+  return !DEFAULT_RECIPES[id];
+}
+
+// 复制菜谱为可读文本 → 用户可发给开发者反馈
+function copyRecipeFeedback(id) {
+  var r = recipes[id];
+  if (!r) return;
+
+  var text = '【' + r.name + '】' + (r.emoji ? ' ' + r.emoji : '') + '\n';
+  text += '用时：' + (r.time || '?') + '  ·  难度：' + (r.difficulty || '?') + '\n';
+  if (r.tags && r.tags.length > 0) text += '标签：' + r.tags.join('、') + '\n';
+
+  text += '\n🥬 食材：\n';
+  (r.ingredients || []).forEach(function(ing) {
+    text += '  - ' + ing.name + (ing.amount ? '  ' + ing.amount : '') + '\n';
+  });
+
+  text += '\n🔧 工具：' + (r.tools || []).join('、') + '\n';
+
+  text += '\n📖 步骤：\n';
+  (r.steps || []).forEach(function(s, i) {
+    text += (i + 1) + '. ' + s.text + (s.time ? '（' + s.time + '秒）' : '') + '\n';
+    if (s.tip) text += '   💡 ' + s.tip + '\n';
+  });
+
+  // 复制到剪贴板
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      showToast('📋 菜谱已复制！请粘贴发送给开发者');
+    }).catch(function() {
+      showToast('📋 复制失败，请尝试截图发送');
+    });
+  } else {
+    // 回退方案：选中文本让用户手动复制
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('📋 菜谱已复制！请粘贴发送给开发者');
+    } catch(e) {
+      showToast('📋 请长按选中下方文本复制：\n' + text.substring(0, 50) + '...');
+    }
+    document.body.removeChild(ta);
+  }
+}
+
+// Toast 提示
+var _toastTimer = null;
+function showToast(msg) {
+  var toast = document.getElementById('toast-msg');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast-msg';
+    toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%);' +
+      'background:#1c1917; color:#fff; padding:12px 24px; border-radius:12px; font-size:14px;' +
+      'z-index:9999; white-space:pre-line; text-align:center; max-width:90vw;' +
+      'box-shadow:0 4px 16px rgba(0,0,0,0.25); transition:opacity 0.3s;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(function() {
+    toast.style.opacity = '0';
+  }, 2500);
+}
+
+// ==================== 管理后台：菜谱编辑器 ====================
+let editingId = null;       // null = 新建, string = 编辑已有
+let editingSteps = [];
+let editingIngredients = [];
+let editingTools = [];
+let editingTags = [];
+const ALL_TAGS = ['快速', '下饭', '荤菜', '海鲜', '主食', '汤羹', '凉菜', '早餐', '宴客', '减脂', '川菜', '粤菜', '鲁菜'];
+
+function openRecipeEditor(id) {
+  editingId = id;
+
+  if (id && recipes[id]) {
+    const r = recipes[id];
+    document.getElementById('editor-title').textContent = '编辑菜谱';
+    document.getElementById('edit-name').value = r.name || '';
+    document.getElementById('edit-emoji').value = r.emoji || '';
+    document.getElementById('edit-time').value = r.time || '';
+    document.getElementById('edit-difficulty').value = r.difficulty || '入门';
+    editingSteps = JSON.parse(JSON.stringify(r.steps || []));
+    editingIngredients = JSON.parse(JSON.stringify(r.ingredients || []));
+    editingTools = [...(r.tools || [])];
+    editingTags = [...(r.tags || [])];
+  } else {
+    editingId = null;
+    document.getElementById('editor-title').textContent = '新建菜谱';
+    document.getElementById('edit-name').value = '';
+    document.getElementById('edit-emoji').value = '';
+    document.getElementById('edit-time').value = '';
+    document.getElementById('edit-difficulty').value = '入门';
+    editingSteps = [];
+    editingIngredients = [];
+    editingTools = [];
+    editingTags = [];
+  }
+
+  renderStepEditor();
+  renderIngredientEditor();
+  renderToolEditor();
+  renderTagEditor();
+  goScreen('admin-editor');
+}
+
+// ---- 步骤编辑器 ----
+function renderStepEditor() {
+  const container = document.getElementById('edit-steps');
+  if (editingSteps.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p style="font-size:13px;">还没有步骤，点击下方按钮添加</p></div>';
+    return;
+  }
+
+  container.innerHTML = editingSteps.map((step, i) => `
+    <div class="step-editor-item">
+      <div class="step-editor-header">
+        <span class="step-editor-num">步骤 ${i + 1}</span>
+        <div class="step-editor-actions">
+          <button class="move-btn" onclick="moveStep(${i}, -1)" ${i === 0 ? 'disabled' : ''} title="上移">↑</button>
+          <button class="move-btn" onclick="moveStep(${i}, 1)" ${i === editingSteps.length - 1 ? 'disabled' : ''} title="下移">↓</button>
+          <button class="icon-btn danger" onclick="deleteStep(${i})" title="删除">🗑</button>
+        </div>
+      </div>
+      <div class="step-editor-body">
+        <textarea class="form-textarea" placeholder="步骤描述（如：倒入食用油15ml，晃动锅让油铺满锅底）"
+                  onchange="editingSteps[${i}].text = this.value" rows="2">${escHtml(step.text || '')}</textarea>
+        <div class="step-editor-row">
+          <input class="form-input time-input" type="number" placeholder="秒数"
+                 value="${step.time || 0}" onchange="editingSteps[${i}].time = parseInt(this.value)||0">
+          <input class="form-input" placeholder="💡 小贴士（如：看到油微微冒烟就可以了）"
+                 value="${escHtml(step.tip || '')}" onchange="editingSteps[${i}].tip = this.value">
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addStep() {
+  editingSteps.push({ text: '', time: 0, tip: '' });
+  renderStepEditor();
+  // 滚动到底部
+  document.getElementById('edit-steps').lastElementChild?.scrollIntoView({ behavior: 'smooth' });
+}
+
+function deleteStep(index) {
+  editingSteps.splice(index, 1);
+  renderStepEditor();
+}
+
+function moveStep(index, direction) {
+  const newIndex = index + direction;
+  if (newIndex < 0 || newIndex >= editingSteps.length) return;
+  [editingSteps[index], editingSteps[newIndex]] = [editingSteps[newIndex], editingSteps[index]];
+  renderStepEditor();
+}
+
+// ---- 食材编辑器 ----
+function renderIngredientEditor() {
+  const container = document.getElementById('edit-ingredients');
+  if (editingIngredients.length === 0) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--text-muted);">暂无食材</p>';
+    return;
+  }
+
+  container.innerHTML = editingIngredients.map((ing, i) => `
+    <div class="tag-row">
+      <input class="form-input" placeholder="食材名（如：鸡蛋）" value="${escHtml(ing.name||'')}"
+             onchange="editingIngredients[${i}].name = this.value" style="flex:1;">
+      <input class="form-input" placeholder="用量（如：3个）" value="${escHtml(ing.amount||'')}"
+             onchange="editingIngredients[${i}].amount = this.value" style="flex:1;">
+      <button class="icon-btn danger" onclick="deleteIngredient(${i})" style="flex-shrink:0;">✕</button>
+    </div>
+  `).join('');
+}
+
+function addIngredientRow() {
+  editingIngredients.push({ name: '', amount: '' });
+  renderIngredientEditor();
+}
+
+function deleteIngredient(index) {
+  editingIngredients.splice(index, 1);
+  renderIngredientEditor();
+}
+
+// ---- 工具编辑器 ----
+function renderToolEditor() {
+  const container = document.getElementById('edit-tools');
+  container.innerHTML = editingTools.map((tool, i) => `
+    <span style="background:var(--orange-light); padding:6px 12px; border-radius:20px; font-size:13px;
+                 display:inline-flex; align-items:center; gap:4px; cursor:pointer;"
+          onclick="deleteTool(${i})" title="点击删除">
+      ${escHtml(tool)} <span style="font-size:10px; opacity:0.5;">✕</span>
+    </span>
+  `).join('');
+}
+
+function addTool() {
+  const input = document.getElementById('new-tool-input');
+  const val = input.value.trim();
+  if (!val) return;
+  if (editingTools.includes(val)) { input.value = ''; return; }
+  editingTools.push(val);
+  input.value = '';
+  renderToolEditor();
+}
+
+function deleteTool(index) {
+  editingTools.splice(index, 1);
+  renderToolEditor();
+}
+
+// ---- 标签编辑器 ----
+function renderTagEditor() {
+  const container = document.getElementById('edit-tags');
+  if (!container) return;
+  container.innerHTML = ALL_TAGS.map(function(t) {
+    var active = editingTags.indexOf(t) !== -1;
+    return '<span class="sort-pill' + (active ? ' active' : '') + '" style="cursor:pointer;" onclick="toggleTag(\'' + t + '\')">' + t + '</span>';
+  }).join('');
+}
+
+function toggleTag(tag) {
+  var idx = editingTags.indexOf(tag);
+  if (idx === -1) {
+    if (editingTags.length < 4) { editingTags.push(tag); }
+  } else {
+    editingTags.splice(idx, 1);
+  }
+  renderTagEditor();
+}
+
+// ---- AI 菜谱生成 ----
+async function generateRecipeWithAI() {
+  var nameInput = document.getElementById('edit-name');
+  var dishName = nameInput.value.trim();
+
+  if (!dishName) {
+    dishName = prompt('🤖 你想做什么菜？\n\n输入菜名，AI 自动生成完整菜谱：');
+    if (!dishName || !dishName.trim()) return;
+    dishName = dishName.trim();
+    nameInput.value = dishName;
+  }
+
+  // 检查 API Key
+  var key = getApiKey();
+  if (!key) {
+    var input = prompt('🔑 使用 AI 功能需要 DeepSeek API Key：\n（在 platform.deepseek.com 免费申请）\n\n输入 Key 后自动开始生成：');
+    if (!input || !input.trim()) return;
+    setApiKey(input.trim());
+  }
+
+  var btn = document.getElementById('ai-gen-btn');
+  var hint = document.getElementById('ai-gen-hint');
+  btn.disabled = true;
+  btn.textContent = '🤖 AI 正在写菜谱...';
+  hint.textContent = '正在调用 AI，预计 10-20 秒，请耐心等待';
+
+  try {
+    var systemPrompt = buildRecipeGenPrompt();
+    var reply = await callAILarge(systemPrompt, '请生成「' + dishName + '」的完整菜谱。');
+
+    // 解析 JSON
+    var recipeData = parseRecipeJSON(reply);
+    if (!recipeData) {
+      throw new Error('AI 返回格式异常，请重试');
+    }
+
+    // 填充表单
+    if (recipeData.emoji) document.getElementById('edit-emoji').value = recipeData.emoji;
+    if (recipeData.time) document.getElementById('edit-time').value = recipeData.time;
+    if (recipeData.difficulty) document.getElementById('edit-difficulty').value = recipeData.difficulty;
+
+    // 标签
+    if (recipeData.tags && Array.isArray(recipeData.tags)) {
+      editingTags = recipeData.tags.filter(function(t) { return ALL_TAGS.indexOf(t) !== -1; });
+      renderTagEditor();
+    }
+
+    // 食材
+    if (recipeData.ingredients && Array.isArray(recipeData.ingredients)) {
+      editingIngredients = recipeData.ingredients.map(function(i) {
+        return { name: i.name || '', amount: i.amount || '' };
+      });
+      renderIngredientEditor();
+    }
+
+    // 工具
+    if (recipeData.tools && Array.isArray(recipeData.tools)) {
+      editingTools = recipeData.tools.filter(function(t) { return t && t.trim(); });
+      renderToolEditor();
+    }
+
+    // 步骤
+    if (recipeData.steps && Array.isArray(recipeData.steps)) {
+      editingSteps = recipeData.steps.map(function(s) {
+        return {
+          text: s.text || '',
+          time: typeof s.time === 'number' ? s.time : (parseInt(s.time) || 0),
+          tip: s.tip || ''
+        };
+      });
+      renderStepEditor();
+    }
+
+    hint.textContent = '✅ 菜谱已生成！请检查并修改，确认无误后保存';
+    hint.style.color = 'var(--green)';
+  } catch (e) {
+    hint.textContent = '❌ ' + (e.message || '生成失败，请重试');
+    hint.style.color = 'var(--red)';
+    if (e.message === 'NO_KEY') {
+      hint.textContent = '❌ 请先设置 API Key（上方设置面板中）';
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🤖 AI 帮我写菜谱';
+}
+
+function buildRecipeGenPrompt() {
+  return '你是「掌厨」APP 的 AI 菜谱生成助手。用户告诉你一道菜名，你生成完整、正宗的中餐菜谱。\n\n' +
+    '## 输出格式（严格遵守！只输出 JSON）\n' +
+    '{\n' +
+    '  "emoji": "🍳",\n' +
+    '  "time": "20分钟",\n' +
+    '  "difficulty": "家常",\n' +
+    '  "tags": ["下饭", "快速"],\n' +
+    '  "ingredients": [{"name":"鸡蛋","amount":"3个"}, ...],\n' +
+    '  "tools": ["炒锅", "碗", "筷子", ...],\n' +
+    '  "steps": [{"text":"步骤描述...","time":60,"tip":"小贴士..."}, ...]\n' +
+    '}\n\n' +
+    '## 字段要求\n' +
+    '- emoji: 1-2个相关食物 emoji\n' +
+    '- time: 预计总用时，如"15分钟"、"1小时"\n' +
+    '- difficulty: 入门/家常/进阶\n' +
+    '- tags: 从以下选1-3个最匹配的：快速、下饭、荤菜、海鲜、主食、汤羹、凉菜、早餐、宴客、减脂、川菜、粤菜、鲁菜\n' +
+    '- ingredients: 4-15种食材，amount 要具体（克、毫升、个、汤匙等）\n' +
+    '- tools: 3-8种必要工具\n' +
+    '- steps: 5-15步，每步的 text 描述要具体（含精确用量、视觉判断标准），time 是操作时间（秒），tip 是实用小贴士。最后一步 time 为 0\n\n' +
+    '## 风格要求\n' +
+    '- 正宗中餐家常做法，步骤要实用可操作\n' +
+    '- 每步描述像有经验的朋友在旁边指导，口语化又专业\n' +
+    '- 包含具体的视觉判断标准（颜色变化、出汁状态等）\n' +
+    '- 小贴士要真诚有用，不是敷衍\n\n' +
+    '## 重要\n' +
+    '只输出 JSON 对象，不要 markdown 代码块，不要任何额外文字！';
+}
+
+function parseRecipeJSON(text) {
+  // 尝试直接解析
+  try { return JSON.parse(text); } catch(e) {}
+
+  // 尝试提取 JSON 代码块
+  var codeMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (codeMatch) {
+    try { return JSON.parse(codeMatch[1].trim()); } catch(e) {}
+  }
+
+  // 尝试找到第一个 { 到最后一个 }
+  var braceMatch = text.match(/\{[\s\S]*\}/);
+  if (braceMatch) {
+    try { return JSON.parse(braceMatch[0]); } catch(e) {}
+  }
+
+  return null;
+}
+
+async function callAILarge(systemPrompt, userMessage) {
+  var key = getApiKey();
+  if (!key) throw new Error('NO_KEY');
+
+  var resp = await fetch(AI_API_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + key,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: AI_MODEL,
+      max_tokens: 3000,
+      temperature: 0.7,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+    }),
+    signal: AbortSignal.timeout(40000),
+  });
+
+  if (!resp.ok) {
+    var err = await resp.json().catch(function() { return {}; });
+    if (resp.status === 401) throw new Error('AUTH');
+    if (resp.status === 429) throw new Error('RATE');
+    throw new Error(err.error ? err.error.message : 'API 错误 (' + resp.status + ')');
+  }
+
+  var data = await resp.json();
+  return data.choices[0].message.content;
+}
+
+// ---- 保存 ----
+function saveRecipe() {
+  const name = document.getElementById('edit-name').value.trim();
+  if (!name) { alert('请输入菜名'); return; }
+  if (editingSteps.length === 0) { alert('请至少添加一个步骤'); return; }
+
+  // 生成 ID
+  let id;
+  if (editingId) {
+    id = editingId;
+  } else {
+    // 从菜名生成拼音 ID
+    id = 'recipe_' + Date.now();
+  }
+
+  // 如果改名了且是新建，用新 ID
+  if (!editingId) {
+    // 简单用时间戳做 ID，保证不重复
+    id = 'recipe_' + Date.now();
+  }
+
+  const recipe = {
+    id: id,
+    name: name,
+    emoji: document.getElementById('edit-emoji').value.trim() || '🍽️',
+    time: document.getElementById('edit-time').value.trim() || '?',
+    difficulty: document.getElementById('edit-difficulty').value,
+    tags: editingTags.slice(),
+    ingredients: editingIngredients.filter(ing => ing.name.trim()),
+    tools: editingTools.filter(t => t.trim()),
+    steps: editingSteps.map(s => ({
+      text: s.text || '',
+      time: s.time || 0,
+      tip: s.tip || '',
+    })).filter(s => s.text.trim()),  // 过滤掉空步骤
+  };
+
+  if (recipe.steps.length === 0) { alert('请至少填写一个步骤的描述'); return; }
+
+  // 如果改名导致 ID 变了（新建时用新 ID 替换旧的临时 ID）
+  if (editingId && editingId !== id) {
+    delete recipes[editingId];
+  }
+
+  recipes[id] = recipe;
+  // 新建菜谱时追加到排序列表末尾
+  if (!editingId && recipeOrder.indexOf(id) === -1) {
+    recipeOrder.push(id);
+    saveSortPrefs();
+  }
+  saveRecipes(recipes);
+  renderHome();
+  goScreen('admin-list');
+  alert(`✅ 「${name}」已保存！`);
+}
+
+// ==================== 初始化 ====================
+renderHome();
+initApiKey();
+// 用 replaceState 设置首页初始历史记录，避免按返回直接退出
+history.replaceState({ screen: 'home' }, '', '#/home');
+currentScreen = 'home';
+
+// 首次使用时提示设置 API Key
+if (!getApiKey()) {
+  setTimeout(function() {
+    if (confirm('👋 欢迎使用掌厨！\n\n要使用 AI 做菜助手和智能推荐功能，需要设置 DeepSeek API Key。\n\n是否现在设置？（之后可在管理后台 ⚙️ 中修改）')) {
+      goScreen('admin-list');
+    }
+  }, 500);
+}
+
+// ==================== 键盘快捷键：Ctrl+Shift+A 进入管理后台 ====================
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+    e.preventDefault();
+    goScreen('admin-list');
+  }
+});
+
+// ==================== PWA Service Worker 注册 ====================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('sw.js').then(function() {
+      // SW 注册成功（静默）
+    }).catch(function() {
+      // SW 注册失败不阻塞 App 正常使用
+    });
+  });
+}
+</script>
+
+</body>
+</html>
