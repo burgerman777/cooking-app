@@ -3587,8 +3587,30 @@ document.addEventListener('keydown', (e) => {
 // ==================== PWA Service Worker 注册 ====================
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('sw.js').then(function() {
-      // SW 注册成功（静默）
+    navigator.serviceWorker.register('sw.js').then(function(registration) {
+      // 检测 SW 更新：当新版本 SW 安装完成后，提示用户刷新
+      registration.addEventListener('updatefound', function() {
+        var newWorker = registration.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', function() {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            // 新 SW 已就绪，旧版还在运行 → 提示刷新
+            var toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;' +
+              'background:#f97316;color:#fff;text-align:center;padding:14px 16px;' +
+              'font-size:15px;cursor:pointer;animation:floatIn 0.3s ease;';
+            toast.textContent = '🔄 有新版本，点击刷新页面';
+            toast.addEventListener('click', function() {
+              window.location.reload();
+            });
+            document.body.appendChild(toast);
+            // 5 秒后自动消失
+            setTimeout(function() {
+              if (toast.parentNode) toast.remove();
+            }, 5000);
+          }
+        });
+      });
     }).catch(function() {
       // SW 注册失败不阻塞 App 正常使用
     });
