@@ -873,7 +873,7 @@
   <div id="admin-recipe-list"></div>
   <button class="add-btn" onclick="openRecipeEditor(null)">+ 添加新菜谱</button>
   <p style="text-align:center; color:var(--text-muted); font-size:12px; margin-top:8px; margin-bottom:20px;">
-    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720c</span>
+    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720d</span>
   </p>
 </div>
 
@@ -1957,8 +1957,7 @@ let timerInterval = null;
 function goPrep() {
   stopTimer();
   stopSpeak();
-  // 与手机原生返回手势保持一致，走 popstate → goScreen 路径
-  window.history.back();
+  goScreen('prep');
 }
 
 function renderCookingStep() {
@@ -2001,7 +2000,16 @@ function renderCookingStep() {
     timerBox.style.display = 'none';
   }
 
-  document.getElementById('btn-prev').disabled = cookingStep === 0;
+  var btnPrev = document.getElementById('btn-prev');
+  if (cookingStep === 0) {
+    btnPrev.textContent = '← 返回备菜';
+    btnPrev.disabled = false;
+    btnPrev.style.opacity = '1';
+  } else {
+    btnPrev.textContent = '← 上一步';
+    btnPrev.disabled = false;
+    btnPrev.style.opacity = '';
+  }
   const btnNext = document.getElementById('btn-next');
   if (cookingStep === total - 1) {
     btnNext.textContent = '🎉 完成！';
@@ -2174,6 +2182,9 @@ function prevStep() {
   if (cookingStep > 0) {
     cookingStep--;
     renderCookingStep();
+  } else {
+    // 第一步：返回备菜页
+    goPrep();
   }
 }
 
