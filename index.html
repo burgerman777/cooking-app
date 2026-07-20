@@ -895,7 +895,7 @@
   <div id="admin-recipe-list"></div>
   <button class="add-btn" onclick="openRecipeEditor(null)">+ 添加新菜谱</button>
   <p style="text-align:center; color:var(--text-muted); font-size:12px; margin-top:8px; margin-bottom:20px;">
-    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720k</span>
+    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720L</span>
   </p>
 </div>
 
@@ -2721,7 +2721,22 @@ function voiceTestSpeak() {
 
   try {
     if (typeof speechSynthesis === 'undefined') {
-      status.innerHTML = '❌ 浏览器不支持语音功能';
+      var browserInfo = '';
+      var ua = navigator.userAgent;
+      if (/MicroMessenger/i.test(ua)) {
+        browserInfo = '当前为<b>微信内置浏览器</b>，不支持语音<br>请点右上角 ┇ →<b>「在浏览器中打开」</b>';
+      } else if (/QQ\//i.test(ua) || /MQQBrowser/i.test(ua)) {
+        browserInfo = '当前为<b>QQ浏览器</b>，不支持语音<br>请复制网址到 <b>Chrome 浏览器</b> 打开';
+      } else if (/UCBrowser/i.test(ua) || /UCWEB/i.test(ua)) {
+        browserInfo = '当前为<b>UC浏览器</b>，不支持语音<br>请复制网址到 <b>Chrome 浏览器</b> 打开';
+      } else if (/baidu/i.test(ua) || /baiduboxapp/i.test(ua)) {
+        browserInfo = '当前浏览器不支持语音<br>请复制网址到 <b>Chrome 浏览器</b> 打开';
+      } else if (/MiuiBrowser/i.test(ua) || /Huawei/i.test(ua) && /Browser/i.test(ua)) {
+        browserInfo = '当前为<b>手机自带浏览器</b>，不支持语音<br>请在应用商店下载 <b>Google Chrome</b> 后打开';
+      } else {
+        browserInfo = '当前浏览器不支持 Web Speech API<br>请安装 <b>Google Chrome</b> 浏览器后打开<br>网址：burgerman777.github.io/cooking-app';
+      }
+      status.innerHTML = '❌ ' + browserInfo;
       btn.textContent = '▶ 重新测试';
       btn.disabled = false;
       return;
@@ -3726,6 +3741,9 @@ initApiKey();
 history.replaceState({ screen: 'home' }, '', '#/home');
 currentScreen = 'home';
 
+// 检测语音是否可用
+var speechAvailable = (typeof speechSynthesis !== 'undefined');
+
 // 首次使用时提示设置 API Key
 if (!getApiKey()) {
   setTimeout(function() {
@@ -3733,6 +3751,18 @@ if (!getApiKey()) {
       goScreen('admin-list');
     }
   }, 500);
+}
+
+// Android 上语音不可用时，一次性提示
+if (!speechAvailable) {
+  setTimeout(function() {
+    var ua = navigator.userAgent;
+    if (/MicroMessenger/i.test(ua)) {
+      alert('💡 提示：当前微信浏览器不支持语音播报。\n如需语音，请点右上角 →「在浏览器中打开」');
+    } else if (/android/i.test(ua)) {
+      alert('💡 提示：当前浏览器不支持语音播报。\n如需语音，请安装 Google Chrome 浏览器打开。\n\n其他功能（计时器、AI助手、菜谱）不受影响。');
+    }
+  }, 1500);
 }
 
 // ==================== 强制刷新（清缓存+更新版本） ====================
