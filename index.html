@@ -605,9 +605,9 @@
 <meta name="apple-mobile-web-app-title" content="掌厨">
 <link rel="apple-touch-icon" href="icon-384.png">
 <script src="recipes.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js" onerror="window._lzstringFailed=true"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="window._qrcodeFailed=true"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="window._html5qrcodeFailed=true"></script>
 </head>
 <body>
 
@@ -784,10 +784,13 @@
         <div class="settings-item" style="grid-column: 1 / -1;">
           <div class="settings-label">🔑 DeepSeek API Key</div>
           <div style="display:flex; gap:6px; margin-top:4px;">
-            <input class="form-input" id="api-key-input" type="password" placeholder="输入sk-..." style="font-size:12px; flex:1;">
+            <input class="form-input" id="api-key-input" type="password" placeholder="sk-..." style="font-size:12px; flex:1;">
             <button class="btn btn-sm btn-blue" onclick="saveApiKey()" style="flex-shrink:0;">保存</button>
           </div>
-          <p style="font-size:9px; color:var(--text-muted); margin-top:3px;">仅存本地浏览器</p>
+          <p style="font-size:9px; color:var(--text-muted); margin-top:3px;">
+            Key 仅存本地浏览器，不上传服务器 ·
+            <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" style="color:var(--orange); text-decoration:underline;">获取 Key →</a>
+          </p>
         </div>
         <!-- 音色管理 -->
         <div class="settings-item" style="grid-column: 1 / -1;">
@@ -806,6 +809,18 @@
             <button class="btn btn-sm" onclick="exportData()" style="flex:1; min-width:70px;">📤 导出文件</button>
             <button class="btn btn-sm" onclick="document.getElementById('import-file').click()" style="flex:1; min-width:70px;">📥 导入文件</button>
           </div>
+        </div>
+        <!-- 隐私说明 -->
+        <div class="settings-item" style="grid-column: 1 / -1;">
+          <div class="settings-label">🔒 隐私说明</div>
+          <p style="font-size:10px; color:var(--text-muted); line-height:1.8; margin-top:4px;">
+            <strong>你的数据完全属于你：</strong><br>
+            · 所有菜谱、评分、设置仅存储在你的浏览器中（localStorage）<br>
+            · API Key 仅用于调用 DeepSeek AI，每次请求直连 DeepSeek 服务器<br>
+            · 本应用<strong>不收集、不上传、不分享</strong>任何你的个人数据<br>
+            · 语音播报使用设备内置 TTS 引擎，不经过任何外部服务<br>
+            · 数据迁移功能由你主动触发，数据经过你的二维码/文件传输
+          </p>
         </div>
       </div>
     </div>
@@ -2865,6 +2880,12 @@ function importData(input) {
 
 // ===== QR 码导出 =====
 function exportQR() {
+  // CDN 加载检查
+  if (window._qrcodeFailed || typeof QRCode === 'undefined') {
+    alert('二维码生成组件加载失败（网络问题），请使用「📤 导出文件」+「📥 导入文件」方式迁移数据。');
+    return;
+  }
+
   var bundle = buildBundle();
   // API Key 确认
   if (bundle.d['zhangchu_api_key']) {
@@ -2877,9 +2898,13 @@ function exportQR() {
   var json = JSON.stringify(bundle);
   // LZString 压缩
   var compressed = '';
-  try {
-    compressed = LZString.compressToBase64(json);
-  } catch(e) {
+  if (!window._lzstringFailed && typeof LZString !== 'undefined') {
+    try {
+      compressed = LZString.compressToBase64(json);
+    } catch(e) {
+      compressed = json;
+    }
+  } else {
     compressed = json;
   }
 
@@ -2919,6 +2944,12 @@ function closeQR() {
 var html5QrScanner = null;
 
 function startScan() {
+  // CDN 加载检查
+  if (window._html5qrcodeFailed || typeof Html5Qrcode === 'undefined') {
+    alert('扫码组件加载失败（网络问题），请使用「📤 导出文件」+「📥 导入文件」方式迁移数据。');
+    return;
+  }
+
   var overlay = document.getElementById('scan-overlay');
   overlay.classList.add('show');
 
@@ -2973,10 +3004,14 @@ function processQRData(text) {
 
   try {
     var json;
-    // 尝试 LZString 解压
-    try {
-      json = LZString.decompressFromBase64(text);
-    } catch(e) {
+    // 尝试 LZString 解压（如 CDN 加载失败则直接当原始 JSON 解析）
+    if (!window._lzstringFailed && typeof LZString !== 'undefined') {
+      try {
+        json = LZString.decompressFromBase64(text);
+      } catch(e) {
+        json = text;
+      }
+    } else {
       json = text;
     }
     var bundle = JSON.parse(json);
