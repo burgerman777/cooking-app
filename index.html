@@ -895,7 +895,7 @@
   <div id="admin-recipe-list"></div>
   <button class="add-btn" onclick="openRecipeEditor(null)">+ 添加新菜谱</button>
   <p style="text-align:center; color:var(--text-muted); font-size:12px; margin-top:8px; margin-bottom:20px;">
-    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720i</span>
+    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720j</span>
   </p>
 </div>
 
@@ -1844,20 +1844,13 @@ function startCooking() {
     alert('请先备齐所有食材再开始做菜');
     return;
   }
-  // iOS/手机端唤醒语音引擎（必须在用户手势内调用，否则会被拦截）
-  if (typeof speechSynthesis !== 'undefined') {
-    try {
+  // 预先告知浏览器"我们要用语音了"（Android/iOS 都需要用户手势）
+  try {
+    if (typeof speechSynthesis !== 'undefined') {
       speechSynthesis.cancel();
       speechSynthesis.getVoices();
-      // iOS 会忽略 volume=0 或空文本的 utterance，用极小音量+空格
-      var wake = new SpeechSynthesisUtterance(' ');
-      wake.volume = 0.01;
-      wake.lang = 'zh-CN';
-      speechSynthesis.speak(wake);
-      // 强制回流确保 iOS 处理 speak（关键！）
-      try { document.body.offsetHeight; } catch(e) {}
-    } catch(e) {}
-  }
+    }
+  } catch(e) {}
   try {
     cookingStep = 0;
     renderCookingStep();
@@ -2439,61 +2432,39 @@ function speakStep(text) {
   if (!voiceEnabled) return;
   if (!text) return;
 
-  // 移除 emoji 和特殊字符（正则包 try/catch 兼容旧浏览器）
+  // 清理 emoji 和特殊字符
   var cleanText = text;
   try {
     cleanText = text.replace(/[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FEFF}]/gu, '').trim();
   } catch(e) {
-    cleanText = text.replace(/[^一-鿿㐀-䶿a-zA-Z0-9\s　-〿＀-￯\d\.\%\+\-℃]+/g, '').trim();
+    cleanText = text;
   }
   if (!cleanText) return;
 
-  // iOS Safari 修复：必须在用户手势内调用 speak，
-  // 且 cancel 是异步的，先强制同步清理
   try {
+    // 简单的 cancel + speak，不做多余操作（Android 上越简单越稳定）
     if (typeof speechSynthesis !== 'undefined') {
-      speechSynthesis.cancel();
-      // 强制回流让 cancel 生效（iOS 关键）
-      try { document.body.offsetHeight; } catch(e) {}
+      try { speechSynthesis.cancel(); } catch(e) {}
     }
-  } catch(e) {}
 
-  try {
-    var utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'zh-CN';
-    utterance.rate = 0.9;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
+    var u = new SpeechSynthesisUtterance(cleanText);
+    u.lang = 'zh-CN';
+    u.rate = 0.9;
+    u.volume = 1.0;
 
-    // 唤醒语音引擎
-    try { speechSynthesis.getVoices(); } catch(e) {}
-
+    // 尝试加载音色（有就用，没有就系统默认）
     var voice = getSelectedVoice();
-    if (voice) utterance.voice = voice;
+    if (voice) u.voice = voice;
 
-    // 保持引用防止 iOS GC 回收导致无声
-    currentUtterance = utterance;
-    utterance.onend = function() { currentUtterance = null; };
-    utterance.onerror = function(e) {
-      currentUtterance = null;
-      // iOS 有时首次 speak 会报 not-allowed，100ms 后重试
-      if (e && (e.error === 'not-allowed' || e.error === 'interrupted')) {
-        setTimeout(function() {
-          try {
-            var retry = new SpeechSynthesisUtterance(cleanText);
-            retry.lang = 'zh-CN';
-            retry.rate = 0.9;
-            retry.volume = 1.0;
-            if (voice) retry.voice = voice;
-            speechSynthesis.speak(retry);
-          } catch(e2) {}
-        }, 150);
-      }
-    };
+    currentUtterance = u;
+    u.onend = function() { currentUtterance = null; };
+    u.onerror = function() { currentUtterance = null; };
 
-    speechSynthesis.speak(utterance);
+    if (typeof speechSynthesis !== 'undefined') {
+      speechSynthesis.speak(u);
+    }
   } catch(e) {
-    // Speech 不支持，静默失败
+    // 静默失败
   }
 }
 
@@ -2643,10 +2614,15 @@ function openVoiceSelector() {
   var overlay = document.getElementById('voice-modal-overlay');
   overlay.classList.add('show');
   renderVoiceSortPills('voice-sort-pills');
-  // 每次打开重置重试计数，重新开始加载
-  voiceRetryCount = 0;
-  voiceLoadStart = Date.now();
-  renderVoiceList();
+  // 先检查是否有已缓存的音色列表
+  var voices = getVoiceList();
+  var container = document.getElementById('voice-modal-list');
+  if (voices.length > 0) {
+    renderVoiceListContent(container, voices);
+  } else {
+    // 没有音色列表 → 实测播报
+    renderVoiceTestPanel(container);
+  }
 }
 
 function closeVoiceSelector(e) {
@@ -2709,113 +2685,73 @@ function getVoiceDisplay(voice) {
   return { name: voice.name, desc: voice.lang, icon: '🎙️' };
 }
 
-function renderVoiceList() {
-  // 清除之前的定时器，避免重复调用
-  if (voiceLoadTimer) { clearTimeout(voiceLoadTimer); voiceLoadTimer = null; }
-
-  var container = document.getElementById('voice-modal-list');
-  var voices = getVoiceList();
-
-  // ===== 情况1：音色已加载 =====
-  if (voices.length > 0) {
-    voiceRetryCount = 0;
-    voicesLoaded = true;
-    renderVoiceListContent(container, voices);
-    return;
-  }
-
-  // ===== 情况2：正在重试中 =====
-  var maxRetries = 6;
-  var retryDelay = 1500; // 1.5秒
-
-  if (voiceRetryCount >= maxRetries) {
-    // 全部重试用完，尝试最后一次盲播测试
-    var canSpeak = testSpeechEngine();
-    if (canSpeak) {
-      container.innerHTML =
-        '<div style="text-align:center;padding:24px;color:var(--text-muted);">' +
-        '✅ 语音引擎可用（使用系统默认音色）<br>' +
-        '<small>音色列表为空通常是因为 Google TTS 未安装或厂商限制<br>' +
-        '但不影响做菜步骤的语音播报，请关闭此面板正常使用</small>' +
-        '</div>';
-    } else {
-      var isWeChat = /MicroMessenger/i.test(navigator.userAgent);
-      var isAndroid = /android/i.test(navigator.userAgent);
-      var msg = '';
-      if (isWeChat) {
-        msg = '微信浏览器不支持语音播报<br>请点右上角「<b>在浏览器中打开</b>」';
-      } else if (isAndroid) {
-        msg = '语音引擎未启动，请检查：<br>' +
-          '1. 是否使用 <b>Chrome 浏览器</b>（厂商自带浏览器可能不支持）<br>' +
-          '2. 设置 → 语言和输入 → <b>文字转语音</b> → 开启<br>' +
-          '3. 如未安装 → <b>Google Play 搜"Google文字转语音"</b>';
-      } else {
-        msg = '浏览器不支持语音播报<br>请尝试使用 Chrome 或 Safari';
-      }
-      container.innerHTML =
-        '<div style="text-align:center;padding:24px;color:var(--text-muted);">' +
-        '😕 语音不可用<br><small>' + msg + '</small>' +
-        '<br><button class="btn btn-sm" onclick="voiceRetryCount=0;renderVoiceList();" style="margin-top:12px;">🔄 重新检测</button>' +
-        '</div>';
-    }
-    return;
-  }
-
-  // ===== 情况3：首次/重试加载中 =====
-  voiceRetryCount++;
-
-  // 首次进入时，尝试唤醒 TTS
-  if (voiceRetryCount === 1) {
-    try {
-      if (typeof speechSynthesis !== 'undefined') {
-        speechSynthesis.cancel();
-        speechSynthesis.getVoices();
-        // 用真实中文文本唤醒 Android TTS
-        var wake2 = new SpeechSynthesisUtterance('你好');
-        wake2.volume = 0.01;
-        wake2.lang = 'zh-CN';
-        wake2.rate = 1.5;
-        speechSynthesis.speak(wake2);
-        // 600ms 后取消并检查
-        setTimeout(function() {
-          try { speechSynthesis.cancel(); } catch(e) {}
-          cachedVoices = speechSynthesis.getVoices();
-          if (cachedVoices.length > 0) voicesLoaded = true;
-        }, 600);
-      }
-    } catch(e) {}
-  }
-
-  // 显示加载动画：旋转图标 + 进度条 + 倒计时
-  var pct = Math.round((voiceRetryCount / maxRetries) * 100);
-  var elapsed = Math.round((Date.now() - voiceLoadStart) / 1000);
+// 音色测试面板：不加载音色列表，直接实测播报
+function renderVoiceTestPanel(container) {
   container.innerHTML =
-    '<div class="voice-loading">' +
-    '<div class="spinner"></div>' +
-    '<p style="color:var(--text-muted);font-size:14px;">正在检测语音引擎...</p>' +
-    '<p style="color:var(--text-muted);font-size:11px;">第 ' + voiceRetryCount + '/' + maxRetries + ' 次 · 已等待 ' + elapsed + ' 秒</p>' +
-    '<div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:' + pct + '%;"></div></div>' +
+    '<div style="text-align:center;padding:30px 20px;">' +
+    '<p style="font-size:40px;margin-bottom:8px;">🔊</p>' +
+    '<p style="font-size:15px;font-weight:600;margin-bottom:16px;">语音播报测试</p>' +
+    '<p style="font-size:12px;color:var(--text-muted);margin-bottom:6px;" id="vo-test-status">点击下方按钮测试语音是否可用</p>' +
+    '<button class="btn btn-primary" onclick="voiceTestSpeak()" style="padding:12px 32px;font-size:15px;margin-bottom:12px;" id="vo-test-btn">▶ 测试播报</button>' +
+    '<p style="font-size:10px;color:var(--text-muted);">会朗读"你好，我是掌厨语音助手"<br>如果能听到声音，做菜步骤就会自动播报</p>' +
     '</div>';
-
-  // 1.5 秒后重试
-  voiceLoadTimer = setTimeout(function() {
-    voiceLoadTimer = null;
-    renderVoiceList();
-  }, retryDelay);
 }
 
-// 测试语音引擎是否真的可用（盲测：播一声立刻取消）
-function testSpeechEngine() {
+// 实测播报（用户点击触发 → 保证用户手势）
+function voiceTestSpeak() {
+  var status = document.getElementById('vo-test-status');
+  var btn = document.getElementById('vo-test-btn');
+  if (!btn) return;
+
+  btn.textContent = '⏳ 正在播报...';
+  btn.disabled = true;
+
   try {
-    if (typeof speechSynthesis === 'undefined') return false;
-    var t = new SpeechSynthesisUtterance('测试');
-    t.volume = 0.01;
-    t.rate = 1.5;
-    speechSynthesis.speak(t);
-    setTimeout(function() { try { speechSynthesis.cancel(); } catch(e) {} }, 100);
-    return true;
+    if (typeof speechSynthesis === 'undefined') {
+      status.innerHTML = '❌ 浏览器不支持语音功能';
+      btn.textContent = '▶ 重新测试';
+      btn.disabled = false;
+      return;
+    }
+
+    speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance('你好，我是掌厨语音助手，做菜的时候我会一步步提醒你');
+    u.lang = 'zh-CN';
+    u.rate = 0.9;
+    u.volume = 1.0;
+
+    u.onend = function() {
+      status.innerHTML = '✅ 语音功能正常！<br><small>做菜步骤将使用系统默认音色自动播报</small>';
+      btn.textContent = '▶ 再测一次';
+      btn.disabled = false;
+      // 标记语音可用
+      voicesLoaded = true;
+    };
+
+    u.onerror = function(e) {
+      var errType = (e && e.error) ? e.error : 'unknown';
+      status.innerHTML = '❌ 语音不可用（' + errType + '）<br><small>请尝试使用 Chrome 浏览器打开</small>';
+      btn.textContent = '▶ 重新测试';
+      btn.disabled = false;
+    };
+
+    speechSynthesis.speak(u);
   } catch(e) {
-    return false;
+    status.innerHTML = '❌ 语音异常: ' + (e.message || '未知错误');
+    btn.textContent = '▶ 重新测试';
+    btn.disabled = false;
+  }
+}
+
+function renderVoiceList() {
+  // 兼容旧调用：检查音色列表，没有就走测试面板
+  var container = document.getElementById('voice-modal-list');
+  if (!container) return;
+  var voices = getVoiceList();
+  if (voices.length > 0) {
+    renderVoiceListContent(container, voices);
+  } else {
+    renderVoiceTestPanel(container);
   }
 }
 
