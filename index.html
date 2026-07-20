@@ -732,7 +732,7 @@
       </div>
       <div style="padding:6px 16px;" id="voice-sort-pills"></div>
       <div class="voice-modal-list" id="voice-modal-list">
-        <div style="text-align:center;padding:30px;color:var(--text-muted);">⏳ 正在加载音色列表...</div>
+        <div style="text-align:center;padding:30px;color:var(--text-muted);">🔊</div>
       </div>
     </div>
   </div>
@@ -895,7 +895,7 @@
   <div id="admin-recipe-list"></div>
   <button class="add-btn" onclick="openRecipeEditor(null)">+ 添加新菜谱</button>
   <p style="text-align:center; color:var(--text-muted); font-size:12px; margin-top:8px; margin-bottom:20px;">
-    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720j</span>
+    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720k</span>
   </p>
 </div>
 
@@ -2585,7 +2585,12 @@ function renderVoiceListIfOpen() {
 }
 
 function getVoiceList() {
-  var voices = speechSynthesis.getVoices();
+  var voices = [];
+  try {
+    if (typeof speechSynthesis !== 'undefined') {
+      voices = speechSynthesis.getVoices();
+    }
+  } catch(e) {}
   // 如果浏览器还没加载音色，使用缓存兜底
   if (voices.length === 0 && cachedVoices.length > 0) {
     voices = cachedVoices;
@@ -2612,15 +2617,23 @@ function getVoiceList() {
 
 function openVoiceSelector() {
   var overlay = document.getElementById('voice-modal-overlay');
+  if (!overlay) return;
   overlay.classList.add('show');
-  renderVoiceSortPills('voice-sort-pills');
-  // 先检查是否有已缓存的音色列表
-  var voices = getVoiceList();
+
+  try { renderVoiceSortPills('voice-sort-pills'); } catch(e) {}
+
   var container = document.getElementById('voice-modal-list');
+  if (!container) return;
+
+  // 安全获取音色列表（Android 上 speechSynthesis 可能半残）
+  var voices = [];
+  try { voices = getVoiceList(); } catch(e) {}
+
   if (voices.length > 0) {
-    renderVoiceListContent(container, voices);
+    try { renderVoiceListContent(container, voices); } catch(e) {
+      renderVoiceTestPanel(container);
+    }
   } else {
-    // 没有音色列表 → 实测播报
     renderVoiceTestPanel(container);
   }
 }
