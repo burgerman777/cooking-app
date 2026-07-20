@@ -667,7 +667,8 @@
     <span id="check-all-text">👆 长按一键备齐</span>
     <span id="check-all-progress" style="position:absolute;left:0;top:0;height:100%;background:var(--green);opacity:0.2;width:0%;transition:none;border-radius:12px;"></span>
   </button>
-  <button class="btn btn-primary" id="btn-start-cook" disabled>全部备齐，开始做菜 →</button>
+  <button class="btn btn-primary" id="btn-start-cook" onclick="startCooking()">全部备齐，开始做菜 →</button>
+  <p style="text-align:center;font-size:10px;color:var(--text-muted);margin-top:4px;display:none;" id="prep-hint-notready">👆 请先备齐所有食材</p>
 </div>
 
 <!-- ==================== 做菜页 ==================== -->
@@ -704,11 +705,12 @@
     <div class="voice-modal" onclick="event.stopPropagation()">
       <div class="voice-modal-header">
         <span class="voice-modal-title">🎵 选择音色</span>
+        <button class="btn btn-sm" onclick="voiceRetryCount=0;cachedVoices=[];voicesLoaded=false;speechSynthesis.getVoices();renderVoiceList();" style="margin-right:8px;font-size:11px;">🔄 刷新</button>
         <button class="voice-modal-close" onclick="closeVoiceSelector()">✕</button>
       </div>
       <div style="padding:6px 16px;" id="voice-sort-pills"></div>
       <div class="voice-modal-list" id="voice-modal-list">
-        <div style="text-align:center;padding:30px;color:var(--text-muted);">正在加载音色列表...</div>
+        <div style="text-align:center;padding:30px;color:var(--text-muted);">⏳ 正在加载音色列表...</div>
       </div>
     </div>
   </div>
@@ -871,7 +873,7 @@
   <div id="admin-recipe-list"></div>
   <button class="add-btn" onclick="openRecipeEditor(null)">+ 添加新菜谱</button>
   <p style="text-align:center; color:var(--text-muted); font-size:12px; margin-top:8px; margin-bottom:20px;">
-    💡 所有修改自动保存到本地浏览器
+    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720a</span>
   </p>
 </div>
 
@@ -1783,19 +1785,41 @@ function renderPrep() {
     `<span style="background:var(--card); padding:6px 12px; border-radius:20px; font-size:13px; box-shadow:var(--shadow);">${escHtml(t)}</span>`
   ).join('');
 
-  document.getElementById('btn-start-cook').disabled = true;
+  updateStartBtn();
 }
 
 function updateStartBtn() {
-  const items = document.querySelectorAll('#ingredients-list .ingredient-item');
-  const allChecked = [...items].every(item => item.classList.contains('checked'));
-  document.getElementById('btn-start-cook').disabled = !allChecked;
+  var items = document.querySelectorAll('#ingredients-list .ingredient-item');
+  var allChecked = items.length > 0 && [...items].every(function(item) { return item.classList.contains('checked'); });
+  var btn = document.getElementById('btn-start-cook');
+  var hint = document.getElementById('prep-hint-notready');
+  if (allChecked) {
+    btn.style.opacity = '1';
+    btn.style.background = '';
+    if (hint) hint.style.display = 'none';
+  } else {
+    btn.style.opacity = '0.5';
+    btn.style.background = 'var(--text-muted)';
+    if (hint) hint.style.display = 'block';
+  }
 }
 
-document.getElementById('btn-start-cook').addEventListener('click', () => {
+// 内联 onclick 调用，手机上比 addEventListener 更可靠
+function startCooking() {
+  var items = document.querySelectorAll('#ingredients-list .ingredient-item');
+  var allChecked = items.length > 0 && [...items].every(function(item) { return item.classList.contains('checked'); });
+  if (!allChecked) {
+    alert('请先备齐所有食材再开始做菜');
+    return;
+  }
   cookingStep = 0;
   renderCookingStep();
   goScreen('cook');
+}
+
+document.getElementById('btn-start-cook').addEventListener('click', function() {
+  // 备用：如果 onclick 没触发（极端情况），这里再保底
+  // 但 onclick 已处理，此处做空操作防止重复触发
 });
 
 // ==================== 备菜滑动一键备齐 ====================
@@ -1910,8 +1934,8 @@ let timerInterval = null;
 function goPrep() {
   stopTimer();
   stopSpeak();
-  // 用 history.back() 返回备菜页，避免在历史栈里堆积重复记录
-  window.history.back();
+  // 不推历史记录，避免历史栈堆积导致退回逻辑混乱
+  goScreen('prep', false);
 }
 
 function renderCookingStep() {
