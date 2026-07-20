@@ -876,7 +876,7 @@
   <div id="admin-recipe-list"></div>
   <button class="add-btn" onclick="openRecipeEditor(null)">+ 添加新菜谱</button>
   <p style="text-align:center; color:var(--text-muted); font-size:12px; margin-top:8px; margin-bottom:20px;">
-    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720f</span>
+    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720g</span>
   </p>
 </div>
 
@@ -1825,13 +1825,18 @@ function startCooking() {
     alert('请先备齐所有食材再开始做菜');
     return;
   }
-  // 手机端唤醒语音引擎（必须在用户手势内调用，否则 iOS 会拦截）
+  // iOS/手机端唤醒语音引擎（必须在用户手势内调用，否则会被拦截）
   if (typeof speechSynthesis !== 'undefined') {
     try {
+      speechSynthesis.cancel();
       speechSynthesis.getVoices();
-      var wake = new SpeechSynthesisUtterance('');
-      wake.volume = 0;
+      // iOS 会忽略 volume=0 或空文本的 utterance，用极小音量+空格
+      var wake = new SpeechSynthesisUtterance(' ');
+      wake.volume = 0.01;
+      wake.lang = 'zh-CN';
       speechSynthesis.speak(wake);
+      // 强制回流确保 iOS 处理 speak（关键！）
+      try { document.body.offsetHeight; } catch(e) {}
     } catch(e) {}
   }
   try {
@@ -2415,10 +2420,24 @@ function speakStep(text) {
   if (!voiceEnabled) return;
   if (!text) return;
 
-  stopSpeak();
-
-  var cleanText = text.replace(/[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FEFF}]/gu, '').trim();
+  // 移除 emoji 和特殊字符（正则包 try/catch 兼容旧浏览器）
+  var cleanText = text;
+  try {
+    cleanText = text.replace(/[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FEFF}]/gu, '').trim();
+  } catch(e) {
+    cleanText = text.replace(/[^一-鿿㐀-䶿a-zA-Z0-9\s　-〿＀-￯\d\.\%\+\-℃]+/g, '').trim();
+  }
   if (!cleanText) return;
+
+  // iOS Safari 修复：必须在用户手势内调用 speak，
+  // 且 cancel 是异步的，先强制同步清理
+  try {
+    if (typeof speechSynthesis !== 'undefined') {
+      speechSynthesis.cancel();
+      // 强制回流让 cancel 生效（iOS 关键）
+      try { document.body.offsetHeight; } catch(e) {}
+    }
+  } catch(e) {}
 
   try {
     var utterance = new SpeechSynthesisUtterance(cleanText);
@@ -2427,21 +2446,35 @@ function speakStep(text) {
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
-    // 确保语音引擎已唤醒（首次调用时可能还没加载音色列表）
-    if (!voicesLoaded && cachedVoices.length === 0) {
-      speechSynthesis.getVoices();
-    }
+    // 唤醒语音引擎
+    try { speechSynthesis.getVoices(); } catch(e) {}
 
     var voice = getSelectedVoice();
     if (voice) utterance.voice = voice;
 
+    // 保持引用防止 iOS GC 回收导致无声
     currentUtterance = utterance;
     utterance.onend = function() { currentUtterance = null; };
-    utterance.onerror = function() { currentUtterance = null; };
+    utterance.onerror = function(e) {
+      currentUtterance = null;
+      // iOS 有时首次 speak 会报 not-allowed，100ms 后重试
+      if (e && (e.error === 'not-allowed' || e.error === 'interrupted')) {
+        setTimeout(function() {
+          try {
+            var retry = new SpeechSynthesisUtterance(cleanText);
+            retry.lang = 'zh-CN';
+            retry.rate = 0.9;
+            retry.volume = 1.0;
+            if (voice) retry.voice = voice;
+            speechSynthesis.speak(retry);
+          } catch(e2) {}
+        }, 150);
+      }
+    };
 
     speechSynthesis.speak(utterance);
   } catch(e) {
-    // Speech not supported, silently fail
+    // Speech 不支持，静默失败
   }
 }
 
