@@ -2,7 +2,7 @@
 // 缓存策略：安装时预缓存核心文件，运行时网络优先、缓存兜底
 // ⚠️ 每次部署时更新 CACHE_VERSION，强制所有客户端刷新缓存
 
-var CACHE_VERSION = 'v3';
+var CACHE_VERSION = 'v4';
 var CACHE_NAME = 'zhangchu-' + CACHE_VERSION;
 var PRE_CACHE = [
   '.',

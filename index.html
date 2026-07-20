@@ -873,7 +873,7 @@
   <div id="admin-recipe-list"></div>
   <button class="add-btn" onclick="openRecipeEditor(null)">+ 添加新菜谱</button>
   <p style="text-align:center; color:var(--text-muted); font-size:12px; margin-top:8px; margin-bottom:20px;">
-    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720a</span>
+    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720b</span>
   </p>
 </div>
 
@@ -1790,16 +1790,22 @@ function renderPrep() {
 
 function updateStartBtn() {
   var items = document.querySelectorAll('#ingredients-list .ingredient-item');
-  var allChecked = items.length > 0 && [...items].every(function(item) { return item.classList.contains('checked'); });
+  var allChecked = false;
+  if (items.length > 0) {
+    allChecked = true;
+    for (var i = 0; i < items.length; i++) {
+      if (!items[i].classList.contains('checked')) { allChecked = false; break; }
+    }
+  }
   var btn = document.getElementById('btn-start-cook');
   var hint = document.getElementById('prep-hint-notready');
   if (allChecked) {
     btn.style.opacity = '1';
-    btn.style.background = '';
+    btn.style.background = '#f97316';
     if (hint) hint.style.display = 'none';
   } else {
-    btn.style.opacity = '0.5';
-    btn.style.background = 'var(--text-muted)';
+    btn.style.opacity = '0.45';
+    btn.style.background = '#a8a29e';
     if (hint) hint.style.display = 'block';
   }
 }
@@ -1807,14 +1813,31 @@ function updateStartBtn() {
 // 内联 onclick 调用，手机上比 addEventListener 更可靠
 function startCooking() {
   var items = document.querySelectorAll('#ingredients-list .ingredient-item');
-  var allChecked = items.length > 0 && [...items].every(function(item) { return item.classList.contains('checked'); });
+  if (items.length === 0) return;
+  var allChecked = true;
+  for (var i = 0; i < items.length; i++) {
+    if (!items[i].classList.contains('checked')) { allChecked = false; break; }
+  }
   if (!allChecked) {
     alert('请先备齐所有食材再开始做菜');
     return;
   }
-  cookingStep = 0;
-  renderCookingStep();
-  goScreen('cook');
+  // 手机端唤醒语音引擎（必须在用户手势内调用，否则 iOS 会拦截）
+  if (typeof speechSynthesis !== 'undefined') {
+    try {
+      speechSynthesis.getVoices();
+      var wake = new SpeechSynthesisUtterance('');
+      wake.volume = 0;
+      speechSynthesis.speak(wake);
+    } catch(e) {}
+  }
+  try {
+    cookingStep = 0;
+    renderCookingStep();
+    goScreen('cook');
+  } catch(e) {
+    alert('跳转异常，请刷新重试');
+  }
 }
 
 document.getElementById('btn-start-cook').addEventListener('click', function() {
@@ -1939,15 +1962,16 @@ function goPrep() {
 }
 
 function renderCookingStep() {
-  const r = currentRecipe;
-  if (!r || !r.steps) return;
-  const step = r.steps[cookingStep];
-  const total = r.steps.length;
+  var r = currentRecipe;
+  if (!r || !r.steps || !r.steps.length) return;
+  var step = r.steps[cookingStep];
+  if (!step) return;
+  var total = r.steps.length;
 
   document.getElementById('cooking-title').textContent = r.name;
-  document.getElementById('step-counter').textContent = `${cookingStep + 1}/${total}`;
-  document.getElementById('progress-fill').style.width = `${((cookingStep + 1) / total) * 100}%`;
-  document.getElementById('step-number').textContent = `第 ${cookingStep + 1} 步`;
+  document.getElementById('step-counter').textContent = (cookingStep + 1) + '/' + total;
+  document.getElementById('progress-fill').style.width = ((cookingStep + 1) / total * 100) + '%';
+  document.getElementById('step-number').textContent = '第 ' + (cookingStep + 1) + ' 步';
   document.getElementById('step-text').textContent = step.text || '';
 
   const tipEl = document.getElementById('step-tip');
@@ -1988,22 +2012,29 @@ function renderCookingStep() {
   }
 
   // 卡片弹入动画
-  const card = document.getElementById('step-card');
-  card.style.transform = 'scale(1.02)';
-  card.style.opacity = '0.7';
-  requestAnimationFrame(() => {
-    card.style.transform = 'scale(1)';
-    card.style.opacity = '1';
-  });
+  var card = document.getElementById('step-card');
+  if (card) {
+    card.style.transform = 'scale(1.02)';
+    card.style.opacity = '0.7';
+    requestAnimationFrame(function() {
+      card.style.transform = 'scale(1)';
+      card.style.opacity = '1';
+    });
+  }
 
-  document.getElementById('step-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // 仅当卡片可见时才滚动（隐藏状态下 scrollIntoView 在部分手机上会报错）
+  try {
+    if (card && card.offsetParent) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  } catch(e) {}
 
   // 更新 AI 助手上下文
-  updateChatContext();
+  try { updateChatContext(); } catch(e) {}
 
   // 语音播报当前步骤
-  if (step && step.text) {
-    speakStep(step.text);
+  if (step.text) {
+    try { speakStep(step.text); } catch(e) {}
   }
   // 滑动指示
   var swipeHint = document.getElementById('step-card');
