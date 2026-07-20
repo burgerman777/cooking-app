@@ -2295,6 +2295,10 @@ function stopSpeak() {
 
 function getSelectedVoice() {
   var voices = speechSynthesis.getVoices();
+  // 浏览器还没返回音色时用缓存兜底
+  if (voices.length === 0 && cachedVoices.length > 0) {
+    voices = cachedVoices;
+  }
   if (!selectedVoiceName) {
     // No preference: pick best Chinese voice
     var zhVoices = voices.filter(function(v) { return v.lang.indexOf('zh-') !== -1; });
@@ -2322,6 +2326,9 @@ function getSelectedVoice() {
 
 function getChineseFallback() {
   var voices = speechSynthesis.getVoices();
+  if (voices.length === 0 && cachedVoices.length > 0) {
+    voices = cachedVoices;
+  }
   for (var i = 0; i < voices.length; i++) {
     if (voices[i].lang.indexOf('zh-CN') !== -1) return voices[i];
   }
@@ -2346,6 +2353,11 @@ function speakStep(text) {
     utterance.rate = 0.9;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
+
+    // 确保语音引擎已唤醒（首次调用时可能还没加载音色列表）
+    if (!voicesLoaded && cachedVoices.length === 0) {
+      speechSynthesis.getVoices();
+    }
 
     var voice = getSelectedVoice();
     if (voice) utterance.voice = voice;
@@ -2478,6 +2490,10 @@ function renderVoiceListIfOpen() {
 
 function getVoiceList() {
   var voices = speechSynthesis.getVoices();
+  // 如果浏览器还没加载音色，使用缓存兜底
+  if (voices.length === 0 && cachedVoices.length > 0) {
+    voices = cachedVoices;
+  }
   // Chinese voices first, then a few good English ones
   var zhVoices = [];
   var enVoices = [];
@@ -2568,17 +2584,35 @@ function renderVoiceList() {
   var voices = getVoiceList();
 
   if (voices.length === 0) {
-    // 手机端语音可能需要一点时间加载，触发引擎并自动重试
-    container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);">⏳ 正在加载音色列表...<br><small>如果长时间未出现，请检查浏览器是否支持语音功能</small></div>';
     // 尝试唤醒语音引擎（部分移动端需要先 speak 一次才会暴露 voice 列表）
     try {
-      var wake = new SpeechSynthesisUtterance('');
+      var wake = new SpeechSynthesisUtterance(' ');
       wake.volume = 0; wake.rate = 1;
       speechSynthesis.speak(wake);
     } catch(e) {}
-    // voiceschanged 事件触发后会自动重新渲染
+
+    // 主动重试：最多等 5 秒，每 1 秒检查一次
+    if (voiceRetryCount < 5) {
+      voiceRetryCount++;
+      container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);">' +
+        '⏳ 正在加载音色列表... ' + voiceRetryCount + '/5<br>' +
+        '<small>首次加载可能需要几秒，请稍候</small></div>';
+      setTimeout(function() {
+        renderVoiceList();
+      }, 1000);
+      return;
+    }
+
+    // 5 次重试后仍为空
+    container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);">' +
+      '😕 未检测到可用音色<br>' +
+      '<small>请确认浏览器支持语音功能（iOS Safari / Android Chrome 均支持）<br>' +
+      '如使用微信打开，请点右上角「在浏览器中打开」</small></div>';
     return;
   }
+
+  // 加载成功，重置重试计数
+  voiceRetryCount = 0;
 
   container.innerHTML = voices.map(function(v) {
     var isSelected = v.name === selectedVoiceName;
@@ -2654,12 +2688,17 @@ function renderVoiceManageList() {
   renderVoiceSortPills('voice-admin-sort-pills');
 
   var allVoices = speechSynthesis.getVoices();
+  // 缓存兜底
+  if (allVoices.length === 0 && cachedVoices.length > 0) {
+    allVoices = cachedVoices;
+  }
   var zhVoices = allVoices.filter(function(v) { return v.lang.indexOf('zh-') !== -1; });
   zhVoices = sortVoices(zhVoices);
 
   if (zhVoices.length === 0) {
-    container.innerHTML = '';
-    if (empty) empty.style.display = 'block';
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">' +
+      '😕 未检测到中文音色<br><small>请确认浏览器支持语音播报</small></div>';
+    if (empty) empty.style.display = 'none';
     return;
   }
 
@@ -2687,13 +2726,20 @@ function renderVoiceManageList() {
     '<p style="font-size:10px;color:var(--text-muted);margin-top:6px;">已屏蔽 ' + voiceBlacklist.length + ' 个音色，屏蔽后做菜页音色列表不再显示</p>');
 }
 
-// Preload voices
+// ==================== 音色预加载 ====================
+var cachedVoices = [];
+var voicesLoaded = false;
+var voiceRetryCount = 0;
+
 if (typeof speechSynthesis !== 'undefined') {
-  // 触发语音引擎加载（部分手机浏览器需要先调用一次 getVoices）
-  speechSynthesis.getVoices();
+  // 必须在 getVoices() 之前设置 onvoiceschanged，否则事件可能丢失（时序竞争）
   speechSynthesis.onvoiceschanged = function() {
-    speechSynthesis.getVoices();
-    // 如果音色面板正打开着，刷新列表
+    cachedVoices = speechSynthesis.getVoices();
+    if (cachedVoices.length > 0) {
+      voicesLoaded = true;
+      voiceRetryCount = 0;
+    }
+    // 刷新当前打开的面板
     var overlay = document.getElementById('voice-modal-overlay');
     if (overlay && overlay.classList.contains('show')) {
       renderVoiceList();
@@ -2704,6 +2750,10 @@ if (typeof speechSynthesis !== 'undefined') {
       renderVoiceManageList();
     }
   };
+  // 触发加载（有可能同步返回，onvoiceschanged 不会再触发）
+  speechSynthesis.getVoices();
+  cachedVoices = speechSynthesis.getVoices();
+  if (cachedVoices.length > 0) voicesLoaded = true;
 }
 
 // ==================== 多标签同步 ====================
