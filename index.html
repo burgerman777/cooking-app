@@ -1794,7 +1794,6 @@ function updateStartBtn() {
 
 document.getElementById('btn-start-cook').addEventListener('click', () => {
   cookingStep = 0;
-  stopTimer();
   renderCookingStep();
   goScreen('cook');
 });
@@ -1911,7 +1910,8 @@ let timerInterval = null;
 function goPrep() {
   stopTimer();
   stopSpeak();
-  goScreen('prep');
+  // 用 history.back() 返回备菜页，避免在历史栈里堆积重复记录
+  window.history.back();
 }
 
 function renderCookingStep() {
