@@ -873,7 +873,7 @@
   <div id="admin-recipe-list"></div>
   <button class="add-btn" onclick="openRecipeEditor(null)">+ 添加新菜谱</button>
   <p style="text-align:center; color:var(--text-muted); font-size:12px; margin-top:8px; margin-bottom:20px;">
-    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720b</span>
+    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720c</span>
   </p>
 </div>
 
@@ -1957,8 +1957,8 @@ let timerInterval = null;
 function goPrep() {
   stopTimer();
   stopSpeak();
-  // 不推历史记录，避免历史栈堆积导致退回逻辑混乱
-  goScreen('prep', false);
+  // 与手机原生返回手势保持一致，走 popstate → goScreen 路径
+  window.history.back();
 }
 
 function renderCookingStep() {
