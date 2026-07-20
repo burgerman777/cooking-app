@@ -614,7 +614,10 @@
 <!-- ==================== 顶部栏 ==================== -->
 <div class="header" id="global-header">
   <div class="logo"><span class="logo-icon">🍳</span>掌厨</div>
-  <button class="admin-entry" id="btn-admin-entry" title="管理后台">⚙️</button>
+  <div style="display:flex; gap:4px;">
+    <button class="admin-entry" onclick="forceRefresh()" title="强制刷新">🔄</button>
+    <button class="admin-entry" id="btn-admin-entry" title="管理后台">⚙️</button>
+  </div>
 </div>
 
 <!-- ==================== 首页 ==================== -->
@@ -873,7 +876,7 @@
   <div id="admin-recipe-list"></div>
   <button class="add-btn" onclick="openRecipeEditor(null)">+ 添加新菜谱</button>
   <p style="text-align:center; color:var(--text-muted); font-size:12px; margin-top:8px; margin-bottom:20px;">
-    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720d</span>
+    💡 所有修改自动保存到本地浏览器 · <span style="color:var(--orange);">v250720e</span>
   </p>
 </div>
 
@@ -3639,6 +3642,28 @@ if (!getApiKey()) {
     if (confirm('👋 欢迎使用掌厨！\n\n要使用 AI 做菜助手和智能推荐功能，需要设置 DeepSeek API Key。\n\n是否现在设置？（之后可在管理后台 ⚙️ 中修改）')) {
       goScreen('admin-list');
     }
+  }, 500);
+}
+
+// ==================== 强制刷新（清缓存+更新版本） ====================
+function forceRefresh() {
+  if (!confirm('🔄 强制刷新？\n\n这将清除所有缓存并重新加载最新版本。')) return;
+  // 清除所有缓存
+  if ('caches' in window) {
+    caches.keys().then(function(names) {
+      names.forEach(function(name) { caches.delete(name); });
+    });
+  }
+  // 注销 Service Worker
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+      regs.forEach(function(reg) { reg.unregister(); });
+    });
+  }
+  // 清除 localStorage 中的版本无关数据... 保留用户数据
+  // 强制重新加载
+  setTimeout(function() {
+    window.location.href = window.location.origin + window.location.pathname + '?t=' + Date.now();
   }, 500);
 }
 
