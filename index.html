@@ -489,6 +489,79 @@
   .floating-timer-text { font-size: 18px; font-weight: 700; font-family: 'SF Mono','Courier New',monospace; min-width: 48px; }
   .floating-timer-name { font-size: 12px; opacity: 0.85; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* ===== 赞赏按钮 ===== */
+  .coffee-fab {
+    position: fixed; bottom: 148px; left: 16px; z-index: 100;
+    width: 44px; height: 44px; border-radius: 50%; border: 2px solid #f59e0b;
+    background: #fffbeb; color: #f59e0b; font-size: 20px;
+    cursor: pointer; box-shadow: 0 4px 16px rgba(245,158,11,0.25);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s; animation: coffeeBounce 3s ease infinite;
+  }
+  .coffee-fab:active { transform: scale(0.9); }
+  @keyframes coffeeBounce {
+    0%, 100% { transform: translateY(0); }
+    8% { transform: translateY(-5px); }
+    16% { transform: translateY(0); }
+  }
+
+  /* ===== 赞赏弹窗 ===== */
+  .support-overlay {
+    position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  }
+  .support-overlay.show { opacity: 1; pointer-events: auto; }
+  .support-modal {
+    background: var(--card); border-radius: 20px; padding: 24px 20px 20px;
+    width: 90%; max-width: 320px; text-align: center;
+    transform: translateY(20px); transition: transform 0.3s ease;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  }
+  .support-overlay.show .support-modal { transform: translateY(0); }
+  .support-modal h3 { font-size: 18px; margin-bottom: 4px; }
+  .support-modal .support-desc { color: var(--text-muted); font-size: 12px; margin-bottom: 16px; line-height: 1.6; }
+
+  /* 二维码区域 */
+  .support-qr-wrap {
+    width: 180px; height: 180px; margin: 0 auto 12px;
+    border-radius: 12px; overflow: hidden; background: #fafaf9;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .support-qr-wrap img {
+    width: 100%; height: 100%; object-fit: contain;
+  }
+  .support-qr-placeholder {
+    color: var(--text-muted); font-size: 12px; text-align: center;
+    padding: 20px; line-height: 1.6;
+  }
+
+  /* 支付方式切换 */
+  .support-tabs {
+    display: flex; gap: 8px; justify-content: center; margin-bottom: 14px;
+  }
+  .support-tab {
+    flex: 0 0 auto; padding: 8px 20px; border-radius: 20px;
+    border: 2px solid var(--border); background: var(--card);
+    font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-muted);
+    transition: all 0.15s; display: flex; align-items: center; gap: 4px;
+  }
+  .support-tab.active {
+    border-color: var(--green); color: #16a34a; background: #f0fdf4;
+  }
+  .support-tab.wechat.active { border-color: #07c160; color: #07c160; background: #f0fdf4; }
+  .support-tab.alipay.active { border-color: #1677ff; color: #1677ff; background: #eff6ff; }
+
+  .support-qr-tip {
+    font-size: 11px; color: var(--text-muted); margin-bottom: 10px;
+  }
+  .support-modal .support-close {
+    background: none; border: none; padding: 8px 20px;
+    border-radius: 8px; font-size: 12px; cursor: pointer; color: var(--text-muted);
+    transition: color 0.15s;
+  }
+  .support-modal .support-close:hover { color: var(--text); }
+
   /* ===== AI 浮动按钮 ===== */
   .ai-fab {
     position: fixed; bottom: 90px; right: 16px; z-index: 100;
@@ -766,6 +839,30 @@ var _hmt = _hmt || [];
     <button class="btn-prev" id="btn-prev" onclick="prevStep()">← 上一步</button>
     <button class="btn-next" id="btn-next" onclick="nextStep()">下一步 →</button>
   </div>
+  <!-- 赞赏支持 -->
+  <button class="coffee-fab" id="coffee-fab" onclick="toggleSupport()" title="赞赏支持">☕</button>
+  <!-- 赞赏弹窗 -->
+  <div class="support-overlay" id="support-overlay" onclick="closeSupport(event)">
+    <div class="support-modal" onclick="event.stopPropagation()">
+      <h3>🧡 支持掌厨</h3>
+      <p class="support-desc">如果掌厨让你的厨房生活更轻松，<br>欢迎扫码赞赏，金额随意～</p>
+      <!-- 支付方式切换 -->
+      <div class="support-tabs">
+        <button class="support-tab wechat active" onclick="switchPayMethod('wechat')">💬 微信</button>
+        <button class="support-tab alipay" onclick="switchPayMethod('alipay')">💙 支付宝</button>
+      </div>
+      <!-- 二维码 -->
+      <div class="support-qr-wrap" id="support-qr-wrap">
+        <img id="support-qr-img" src="wechat-qr.png" alt="微信赞赏码" onerror="this.style.display='none';document.getElementById('support-qr-placeholder').style.display='block';">
+        <div class="support-qr-placeholder" id="support-qr-placeholder" style="display:none;">
+          📷<br>请将你的收款码保存为<br><b>wechat-qr.png</b><br>放到项目目录中
+        </div>
+      </div>
+      <p class="support-qr-tip" id="support-qr-tip">📱 打开微信扫一扫即可赞赏</p>
+      <button class="support-close" onclick="closeSupport()">先不用，下次再说</button>
+    </div>
+  </div>
+
   <!-- AI 助手 -->
   <button class="ai-fab" id="ai-fab" onclick="toggleChat()" title="AI 做菜助手">🤖</button>
   <div class="ai-chat-overlay" id="ai-chat-overlay" onclick="toggleChat()"></div>
@@ -1173,6 +1270,53 @@ async function callAI(systemPrompt, userMessage) {
 
   var data = await resp.json();
   return data.choices[0].message.content;
+}
+
+// ==================== 赞赏支持 ====================
+var currentPayMethod = 'wechat';
+
+function toggleSupport() {
+  var overlay = document.getElementById('support-overlay');
+  if (overlay.classList.contains('show')) {
+    overlay.classList.remove('show');
+  } else {
+    overlay.classList.add('show');
+  }
+}
+
+function closeSupport(e) {
+  if (e && e.target && e.target.id !== 'support-overlay') {}
+  var overlay = document.getElementById('support-overlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+function switchPayMethod(method) {
+  currentPayMethod = method;
+  // 更新 tab 样式
+  document.querySelectorAll('.support-tab').forEach(function(tab) {
+    tab.classList.remove('active');
+    if ((method === 'wechat' && tab.classList.contains('wechat')) ||
+        (method === 'alipay' && tab.classList.contains('alipay'))) {
+      tab.classList.add('active');
+    }
+  });
+  // 切换图片
+  var img = document.getElementById('support-qr-img');
+  var placeholder = document.getElementById('support-qr-placeholder');
+  var tip = document.getElementById('support-qr-tip');
+  if (method === 'wechat') {
+    img.src = 'wechat-qr.png';
+    img.alt = '微信赞赏码';
+    img.style.display = '';
+    placeholder.style.display = 'none';
+    tip.textContent = '📱 打开微信扫一扫即可赞赏';
+  } else {
+    img.src = 'alipay-qr.png';
+    img.alt = '支付宝收款码';
+    img.style.display = '';
+    placeholder.style.display = 'none';
+    tip.textContent = '📱 打开支付宝扫一扫即可赞赏';
+  }
 }
 
 // ==================== AI 聊天 ====================
