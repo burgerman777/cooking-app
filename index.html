@@ -290,6 +290,28 @@
   .form-row { display: flex; gap: 10px; }
   .form-row > * { flex: 1; }
 
+  /* Skeleton loading */
+  .skeleton-card {
+    background: var(--card); border-radius: 16px; padding: 18px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 14px; overflow: hidden;
+  }
+  .skeleton-emoji {
+    width: 60px; height: 44px; background: #e5e5e5; border-radius: 8px; flex-shrink: 0;
+  }
+  .skeleton-info { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .skeleton-line {
+    height: 14px; background: #e5e5e5; border-radius: 4px; width: 100%;
+  }
+  .skeleton-line.short { width: 60%; }
+  .skeleton-shimmer {
+    animation: skeletonShimmer 1.5s ease-in-out infinite;
+  }
+  @keyframes skeletonShimmer {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+  }
+
   /* 步骤编辑器 */
   .step-editor-item {
     background: var(--card); border-radius: 12px; padding: 14px;
@@ -712,20 +734,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="掌厨">
 <link rel="apple-touch-icon" href="icon-384.png">
-<script src="recipes.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js" onerror="window._lzstringFailed=true"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="window._qrcodeFailed=true"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="window._html5qrcodeFailed=true"></script>
-<!-- 百度统计 -->
-<script>
-var _hmt = _hmt || [];
-(function() {
-  var hm = document.createElement("script");
-  hm.src = "https://hm.baidu.com/hm.js?99d046d279cebc84ff64188301cbe3d4";
-  var s = document.getElementsByTagName("script")[0];
-  s.parentNode.insertBefore(hm, s);
-})();
-</script>
+<link rel="dns-prefetch" href="//cdn.jsdelivr.net">
+<link rel="dns-prefetch" href="//unpkg.com">
+<link rel="dns-prefetch" href="//hm.baidu.com">
 </head>
 <body>
 
@@ -768,7 +779,11 @@ var _hmt = _hmt || [];
     </div>
     <div class="ai-recommend-result" id="ai-recommend-result" onclick="goToRecommended()"></div>
   </div>
-  <div id="recipe-list"></div>
+  <div id="recipe-list">
+  <div class="skeleton-card skeleton-shimmer"><div class="skeleton-emoji"></div><div class="skeleton-info"><div class="skeleton-line"></div><div class="skeleton-line short"></div></div></div>
+  <div class="skeleton-card skeleton-shimmer"><div class="skeleton-emoji"></div><div class="skeleton-info"><div class="skeleton-line"></div><div class="skeleton-line short"></div></div></div>
+  <div class="skeleton-card skeleton-shimmer"><div class="skeleton-emoji"></div><div class="skeleton-info"><div class="skeleton-line"></div><div class="skeleton-line short"></div></div></div>
+</div>
   <div id="empty-home-msg" style="text-align:center; margin-top:16px;"></div>
 </div>
 
@@ -1115,6 +1130,21 @@ var _hmt = _hmt || [];
   <span class="floating-timer-name" id="floating-timer-name"></span>
 </div>
 
+<script src="recipes.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js" onerror="window._lzstringFailed=true"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="window._qrcodeFailed=true"></script>
+<script defer src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="window._html5qrcodeFailed=true"></script>
+<!-- 百度统计 -->
+<script>
+var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?99d046d279cebc84ff64188301cbe3d4";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+})();
+</script>
+
 <script>
 // ==================== 数据层 ====================
 const STORAGE_KEY = 'zhangchu_recipes';
@@ -1123,6 +1153,11 @@ const STORAGE_KEY = 'zhangchu_recipes';
 // 修改/新增菜谱：编辑 recipes.js 或通过管理后台操作
 // 加载数据
 function loadRecipes() {
+  // 防御：如果 recipes.js 未加载（如 file:// 协议被浏览器阻止），回退到空对象
+  if (typeof DEFAULT_RECIPES === 'undefined') {
+    console.warn('⚠️ DEFAULT_RECIPES 未加载，使用空菜谱。请通过管理后台添加或检查网络。');
+    return {};
+  }
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -3447,7 +3482,7 @@ function deleteRecipe(id) {
 
 // 判断是否为用户自创菜谱（不在默认菜谱中）
 function isCustomRecipe(id) {
-  return !DEFAULT_RECIPES[id];
+  return !(typeof DEFAULT_RECIPES !== 'undefined' && DEFAULT_RECIPES[id]);
 }
 
 // 复制菜谱为可读文本 → 用户可发给开发者反馈

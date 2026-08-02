@@ -2,7 +2,7 @@
 // 缓存策略：安装时预缓存核心文件，运行时网络优先、缓存兜底
 // ⚠️ 每次部署时更新 CACHE_VERSION，强制所有客户端刷新缓存
 
-var CACHE_VERSION = 'v4';
+var CACHE_VERSION = 'v5';
 var CACHE_NAME = 'zhangchu-' + CACHE_VERSION;
 var PRE_CACHE = [
   '.',
@@ -46,15 +46,24 @@ self.addEventListener('fetch', function(e) {
   // 只处理 GET 请求
   if (e.request.method !== 'GET') return;
 
-  // CDN 资源（QR库等）：缓存优先
+  // CDN 资源（QR库等）：stale-while-revalidate — 立即返回缓存，后台更新
   if (e.request.url.indexOf('cdn.jsdelivr.net') !== -1 ||
       e.request.url.indexOf('unpkg.com') !== -1) {
     e.respondWith(
       caches.match(e.request).then(function(cached) {
-        return cached || fetch(e.request).then(function(resp) {
+        // 后台更新缓存
+        var fetchPromise = fetch(e.request).then(function(resp) {
           var clone = resp.clone();
           caches.open(CACHE_NAME).then(function(c) { c.put(e.request, clone); });
           return resp;
+        }).catch(function() { return null; });
+        // 优先返回缓存，没有时才等网络
+        if (cached) {
+          // 5分钟后才更新，避免频繁写入
+          return cached;
+        }
+        return fetchPromise.then(function(resp) {
+          return resp || new Response('CDN 不可用', { status: 503 });
         });
       })
     );
@@ -67,7 +76,7 @@ self.addEventListener('fetch', function(e) {
       var timeoutId = setTimeout(function() {
         timeoutId = null;
         caches.match(e.request).then(function(cached) {
-          if (cached) resolve(cached);
+          resolve(cached || new Response('加载超时，请检查网络', { status: 408 }));
         });
       }, 3000);
 
