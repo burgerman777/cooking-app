@@ -1131,6 +1131,7 @@
 </div>
 
 <script src="recipes.js"></script>
+<script src="agent.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js" onerror="window._lzstringFailed=true"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="window._qrcodeFailed=true"></script>
 <script defer src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="window._html5qrcodeFailed=true"></script>
@@ -1194,6 +1195,7 @@ function saveRecipes(recipes) {
 }
 
 let recipes = loadRecipes();
+window.recipes = recipes; // Agent 工具需要访问 window.recipes
 
 // ==================== 排序偏好 ====================
 const SORT_MODE_KEY = 'zhangchu_sort_mode';
@@ -1458,8 +1460,10 @@ async function sendMessage() {
   showTyping();
 
   try {
-    var systemPrompt = buildCookingContext();
-    var reply = await callAI(systemPrompt, text);
+    // ── Agent 升级：用 cookingAgent 替代单次 callAI ──
+    var context = currentRecipe ? { recipe: currentRecipe, step: cookingStep } : {};
+    var mode = currentRecipe ? 'chat' : 'general';
+    var reply = await cookingAgent(mode, text, context);
     hideTyping();
     addChatMsg('assistant', reply);
   } catch (e) {
@@ -1481,26 +1485,7 @@ async function sendMessage() {
 // ==================== AI 推荐 ====================
 var recommendedRecipeId = null;
 
-function buildRecommendContext(userIngredients) {
-  var allIds = Object.keys(recipes);
-  var recipeList = allIds.map(function(id) {
-    var r = recipes[id];
-    var ings = (r.ingredients || []).map(function(i) { return i.name; }).join('、');
-    return '- ' + r.name + '（' + (r.difficulty || '') + ' / ' + (r.time || '') + '）：' + ings;
-  }).join('\n');
-
-  return '你是「掌厨」APP 的美食推荐助手。用户告诉你冰箱里有食材，你根据现有菜谱推荐最合适的。\n\n' +
-    '## 现有菜谱\n' + recipeList + '\n\n' +
-    '## 规则\n' +
-    '1. 优先推荐食材匹配度最高的菜\n' +
-    '2. 匹配度 >= 70% 就强烈推荐\n' +
-    '3. 缺少 1-2 样关键食材，说明缺什么但也可以推荐\n' +
-    '4. 完全不能做任何菜时，诚实告知并建议补充\n' +
-    '5. 只推荐现有菜谱中的菜，不要发明新菜\n\n' +
-    '## 输出格式（严格遵守！只输出一行）\n' +
-    '菜名|推荐理由（一句话）\n' +
-    '如果不能推荐：无|原因';
-}
+// buildRecommendContext 已删除 — Agent 用 find_by_ingredients 工具替代，不再把所有菜谱塞进 prompt
 
 async function getAiRecommendation() {
   if (!checkApiKey()) return;
@@ -1516,42 +1501,32 @@ async function getAiRecommendation() {
   resultDiv.classList.remove('show');
 
   try {
-    var systemPrompt = buildRecommendContext(text);
-    var reply = await callAI(systemPrompt, '我冰箱里有：' + text + '\n请推荐一道菜。');
+    // ── Agent 升级：Agent 自己判断意图，搜菜谱或匹配食材 ──
+    // 不再假设用户一定在说冰箱食材，让 Agent 自己判断
+    var reply = await cookingAgent('general', text);
 
-    // Parse reply: "菜名|理由"
-    var parts = reply.split('|');
-    var dishName = (parts[0] || '').trim();
-    var reason = (parts[1] || '').trim();
-
-    if (dishName === '无' || !dishName) {
-      resultDiv.innerHTML = '<div style="color:var(--text-muted);">😕 ' + (reason || '没找到合适的菜谱，试试补充更多食材？') + '</div>';
-      resultDiv.classList.add('show');
-      resultDiv.style.cursor = 'default';
-      resultDiv.onclick = null;
-      return;
-    }
-
-    // Find matching recipe
+    // 尝试从回复中匹配菜谱名，用于"点击开始做"功能
     var matchedId = null;
-    Object.keys(recipes).forEach(function(id) {
-      if (recipes[id].name === dishName || recipes[id].name.indexOf(dishName) !== -1 || dishName.indexOf(recipes[id].name) !== -1) {
-        matchedId = id;
+    var allIds = Object.keys(recipes);
+    for (var i = 0; i < allIds.length; i++) {
+      var r = recipes[allIds[i]];
+      if (r && reply.indexOf(r.name) !== -1) {
+        matchedId = allIds[i];
+        break;
       }
-    });
+    }
 
     if (matchedId) {
       recommendedRecipeId = matchedId;
       resultDiv.innerHTML = '<div class="rec-dish">' + recipes[matchedId].emoji + ' ' + escHtml(recipes[matchedId].name) + '</div>' +
-        '<div class="rec-reason">' + escHtml(reason) + '</div>' +
+        '<div class="rec-reason">' + reply.replace(/\n/g, '<br>') + '</div>' +
         '<div class="rec-hint">👆 点击直接开始做这道菜</div>';
       resultDiv.classList.add('show');
       resultDiv.style.cursor = 'pointer';
       resultDiv.onclick = goToRecommended;
     } else {
       recommendedRecipeId = null;
-      resultDiv.innerHTML = '<div style="color:var(--text-muted);">🤔 AI 推荐了「' + escHtml(dishName) + '」，但菜谱中还没有这道菜。<br>' +
-        '理由：' + escHtml(reason) + '</div>';
+      resultDiv.innerHTML = '<div class="rec-reason">' + reply.replace(/\n/g, '<br>') + '</div>';
       resultDiv.classList.add('show');
       resultDiv.style.cursor = 'default';
       resultDiv.onclick = null;
@@ -3148,6 +3123,7 @@ window.addEventListener('storage', function(e) {
   if (e.key && e.key.indexOf('zhangchu_') === 0) {
     if (e.key === STORAGE_KEY) {
       recipes = loadRecipes();
+      window.recipes = recipes;
       if (document.getElementById('screen-home').classList.contains('active')) renderHome();
     }
     if (e.key === RATINGS_KEY) loadRatings();
