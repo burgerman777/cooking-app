@@ -96,23 +96,67 @@ var COOKING_TOOLS = [
 // ─── 工具实现 ──────────────────────────────
 
 /**
- * 搜索菜谱
- * 从 window.recipes 中按多个维度筛选
+ * 构建菜谱结果摘要 —— 含食材和步骤预览，大多数情况不需再调 get_recipe_detail
  */
-function executeSearchRecipes(args) {
+function buildRecipeSummary(r) {
+  if (!r) return null;
+  var ings = (r.ingredients || []).map(function(ing) {
+    return ing.name + (ing.amount ? ' ' + ing.amount : '');
+  }).join('、');
+
+  var stepsPreview = (r.steps || []).slice(0, 3).map(function(s, i) {
+    return (i + 1) + '.' + s.text;
+  }).join(' ');
+
+  return {
+    id: r.id,
+    name: r.name,
+    emoji: r.emoji || '🍳',
+    time: r.time,
+    difficulty: r.difficulty,
+    tags: (r.tags || []).join('、'),
+    ingredients: ings,
+    steps_preview: stepsPreview + ((r.steps || []).length > 3 ? '…共' + r.steps.length + '步' : ''),
+    key_tip: (r.steps || []).length > 0 && r.steps[0].tip ? r.steps[0].tip : ''
+  };
+}
+
+/**
+ * 搜索菜谱
+ * 语义优先：模型就绪 + 纯关键词（无标签/难度筛选）→ 语义向量检索
+ * 否则：关键词/标签/难度多维子串筛选（原逻辑兜底）
+ */
+async function executeSearchRecipes(args) {
   var keyword = (args.keyword || '').toLowerCase();
   var tags = args.tags ? args.tags.split(/[,，、]/).map(function(t) { return t.trim(); }) : [];
   var difficulty = args.difficulty || '';
   var maxResults = args.max_results || 5;
 
+  // 语义优先：有 keyword、无严格筛选、语义模型就绪 → 用语义向量检索
+  if (keyword && tags.length === 0 && !difficulty && window.__semantic && window.__semantic.isReady()) {
+    try {
+      var sem = await window.__semantic.search(keyword, maxResults);
+      if (sem && sem.length > 0) {
+        var semRecipes = sem
+          .map(function(s) { return buildRecipeSummary(window.recipes[s.id]); })
+          .filter(function(r) { return r && r.name; });
+        if (semRecipes.length > 0) {
+          return { found: semRecipes.length, keyword: keyword, semantic: true, recipes: semRecipes };
+        }
+      }
+    } catch (e) {
+      console.warn('[语义搜索] 检索失败，回退关键词:', e.message);
+    }
+  }
+
+  // 关键词兜底：菜名/标签/食材名子串匹配 + 标签/难度筛选
   var allIds = Object.keys(window.recipes);
-  var results = [];
+  var matched = [];
 
   for (var i = 0; i < allIds.length; i++) {
     var r = window.recipes[allIds[i]];
     if (!r) continue;
 
-    // 关键词匹配：菜名、标签、食材名
     if (keyword) {
       var inName = r.name.toLowerCase().indexOf(keyword) !== -1;
       var inTags = (r.tags || []).some(function(t) { return t.toLowerCase().indexOf(keyword) !== -1; });
@@ -122,41 +166,19 @@ function executeSearchRecipes(args) {
       if (!inName && !inTags && !inIngredients) continue;
     }
 
-    // 标签筛选（同时满足所有指定标签）
     if (tags.length > 0) {
       var recipeTags = r.tags || [];
       var allMatch = tags.every(function(t) { return recipeTags.indexOf(t) !== -1; });
       if (!allMatch) continue;
     }
 
-    // 难度筛选
     if (difficulty && r.difficulty !== difficulty) continue;
 
-    // 构建结果摘要 — 含食材和步骤预览，大多数情况不需再调 get_recipe_detail
-    var ings = (r.ingredients || []).map(function(ing) {
-      return ing.name + (ing.amount ? ' ' + ing.amount : '');
-    }).join('、');
-
-    var stepsPreview = (r.steps || []).slice(0, 3).map(function(s, i) {
-      return (i + 1) + '.' + s.text;
-    }).join(' ');
-
-    results.push({
-      id: r.id,
-      name: r.name,
-      emoji: r.emoji || '🍳',
-      time: r.time,
-      difficulty: r.difficulty,
-      tags: (r.tags || []).join('、'),
-      ingredients: ings,
-      steps_preview: stepsPreview + ((r.steps || []).length > 3 ? '…共' + r.steps.length + '步' : ''),
-      key_tip: (r.steps || []).length > 0 && r.steps[0].tip ? r.steps[0].tip : ''
-    });
-
-    if (results.length >= maxResults) break;
+    matched.push(r);
+    if (matched.length >= maxResults) break;
   }
 
-  if (results.length === 0) {
+  if (matched.length === 0) {
     return {
       found: 0,
       keyword: keyword || '(无)',
@@ -165,9 +187,9 @@ function executeSearchRecipes(args) {
   }
 
   return {
-    found: results.length,
+    found: matched.length,
     keyword: keyword || '(全部)',
-    recipes: results
+    recipes: matched.map(buildRecipeSummary)
   };
 }
 
@@ -324,12 +346,12 @@ function executeFindByIngredients(args) {
 /**
  * 工具调度器
  */
-function executeCookingTool(toolName, args) {
+async function executeCookingTool(toolName, args) {
   var result;
   switch (toolName) {
-    case 'search_recipes':      result = executeSearchRecipes(args);      break;
-    case 'get_recipe_detail':   result = executeGetRecipeDetail(args);    break;
-    case 'find_by_ingredients': result = executeFindByIngredients(args);  break;
+    case 'search_recipes':      result = await executeSearchRecipes(args);      break;
+    case 'get_recipe_detail':   result = executeGetRecipeDetail(args);          break;
+    case 'find_by_ingredients': result = executeFindByIngredients(args);        break;
     default:
       result = { error: '未知工具: ' + toolName };
   }
@@ -412,6 +434,7 @@ async function agentLoop(mode, userMessage, context) {
 
   var MAX_LOOPS = 8;
   var toolCallHistory = [];
+  var collectedIds = [];   // 工具返回里出现的菜谱 id（供前端渲染可点击卡片）
 
   for (var i = 0; i < MAX_LOOPS; i++) {
     var key = getApiKey();
@@ -466,7 +489,22 @@ async function agentLoop(mode, userMessage, context) {
           });
           continue;
         }
-        var result = executeCookingTool(toolName, args);
+        var result = await executeCookingTool(toolName, args);
+
+        // 收集工具返回里的菜谱 id（结构化，不靠文本匹配）
+        try {
+          var parsed = JSON.parse(result);
+          var pushIds = function(list) {
+            if (!list) return;
+            for (var k = 0; k < list.length; k++) {
+              var rid = list[k] && list[k].id;
+              if (rid && collectedIds.indexOf(rid) === -1) collectedIds.push(rid);
+            }
+          };
+          if (parsed.recipes) pushIds(parsed.recipes);
+          if (parsed.recommendations) pushIds(parsed.recommendations);
+          if (parsed.id && collectedIds.indexOf(parsed.id) === -1) collectedIds.push(parsed.id);
+        } catch (e) { /* 忽略解析失败 */ }
 
         messages.push({
           role: 'tool',
@@ -480,11 +518,11 @@ async function agentLoop(mode, userMessage, context) {
       if (toolCallHistory.length > 0) {
         console.log('[Agent] 工具链: ' + toolCallHistory.join(' → ') + ' | 共 ' + (i + 1) + ' 轮');
       }
-      return msg.content;
+      return { reply: msg.content, recipeIds: collectedIds };
     }
   }
 
-  return '抱歉，这个问题有点复杂，请换个方式问我试试？';
+  return { reply: '抱歉，这个问题有点复杂，请换个方式问我试试？', recipeIds: collectedIds };
 }
 
 // ─── 对外接口（替换原来的 callAI）────────────────
@@ -494,28 +532,70 @@ async function agentLoop(mode, userMessage, context) {
  *
  * 用法：
  *   // 做菜陪伴聊天
- *   var reply = await cookingAgent('chat', '这步油温怎么判断够不够？', {
+ *   var res = await cookingAgent('chat', '这步油温怎么判断够不够？', {
  *     recipe: currentRecipe,
  *     step: cookingStep
  *   });
+ *   res.reply;      // AI 文本回复
+ *   res.recipeIds;  // 结构化推荐菜谱 id（general 模式预搜索命中时才有，否则空数组）
  *
  *   // 食材推荐
- *   var reply = await cookingAgent('recommend', '鸡胸肉、番茄、鸡蛋');
+ *   var res = await cookingAgent('recommend', '鸡胸肉、番茄、鸡蛋');
  *
  *   // 通用问答
- *   var reply = await cookingAgent('general', '有什么30分钟内能做完的川菜？');
+ *   var res = await cookingAgent('general', '有什么30分钟内能做完的川菜？');
  *
  * @param {string} mode - 'chat' | 'recommend' | 'general'
  * @param {string} userMessage - 用户输入
  * @param {object} context - 可选，烹饪上下文
- * @returns {Promise<string>} Agent 的最终回复
+ * @returns {Promise<{reply: string, recipeIds: string[]}>} Agent 回复 + 结构化推荐 id
  */
 /**
  * 预搜索 — 在调 Agent 之前，客户端先跑搜索
  * 结果注入第一轮 prompt，Agent 直接回答，省掉一轮 API 调用
  * 这是从 2 轮 → 1 轮的关键优化
  */
-function preSearch(userMessage) {
+
+// ─── 口语 → 标签 同义映射 ──────────────────────────────
+// 用户自然语言里「说意图」的词 → 菜谱的 18 个标签。
+// 为什么需要：bge 语义向量对这类口语词匹配弱（「健身」对不上「减脂」），
+// 而这些词能精准命中标签，所以优先走标签搜索，比语义更可靠。
+// 顺序即优先级：一个查询命中多个标签时，取靠前的那个（如「麻辣下饭」→ 取川菜）。
+// 维护方式：想加新口语词，往对应标签的 words 数组里补一项即可，无需改别的代码。
+// 注意：只放「意图词」，不放单字食材词（如「汤/虾/鱼」），避免在具体菜名里误命中。
+var TAG_INTENTS = [
+  { tag: '减脂', words: ['减脂', '健身', '减肥', '瘦身', '减重', '增肌', '低卡', '低脂', '轻食', '清淡', '健康', '减脂餐'] },
+  { tag: '川菜', words: ['川菜', '川味', '麻辣', '四川'] },
+  { tag: '粤菜', words: ['粤菜', '广式', '广东', '粤式', '港式'] },
+  { tag: '湘菜', words: ['湘菜', '湖南', '湘味'] },
+  { tag: '鲁菜', words: ['鲁菜', '山东'] },
+  { tag: '苏菜', words: ['苏菜', '江苏', '淮扬', '江浙'] },
+  { tag: '浙菜', words: ['浙菜', '浙江', '杭帮'] },
+  { tag: '闽菜', words: ['闽菜', '福建'] },
+  { tag: '徽菜', words: ['徽菜', '安徽'] },
+  { tag: '宴客', words: ['宴客', '请客', '聚会', '待客', '年夜饭', '招待'] },
+  { tag: '早餐', words: ['早餐', '早饭', '早点', '早上吃', '晨间'] },
+  { tag: '凉菜', words: ['凉菜', '凉拌', '冷菜', '冷盘', '爽口'] },
+  { tag: '汤羹', words: ['汤羹', '煲汤', '喝汤', '炖汤'] },
+  { tag: '海鲜', words: ['海鲜', '海味'] },
+  { tag: '主食', words: ['主食', '米饭', '面食'] },
+  { tag: '下饭', words: ['下饭', '开胃', '配饭', '拌饭'] },
+  { tag: '快速', words: ['快速', '快手', '简单', '省事', '好做', '懒人', '快菜', '容易做'] },
+  { tag: '荤菜', words: ['荤菜', '硬菜', '肉菜', '大菜'] }
+];
+
+// 从消息里检测命中的标签意图，没命中返回 null
+function detectTagIntent(msg) {
+  for (var i = 0; i < TAG_INTENTS.length; i++) {
+    var words = TAG_INTENTS[i].words;
+    for (var j = 0; j < words.length; j++) {
+      if (msg.indexOf(words[j]) !== -1) return TAG_INTENTS[i].tag;
+    }
+  }
+  return null;
+}
+
+async function preSearch(userMessage) {
   var msg = userMessage || '';
   var results = {};
 
@@ -526,7 +606,44 @@ function preSearch(userMessage) {
     results.ingredient_match = JSON.parse(executeFindByIngredients({ ingredients: msg }));
   }
 
-  // 2. 关键词搜索 — 用常见食物词匹配
+  var isIngredientList = looksLikeIngredients || !!ingMatch;
+
+  // 2. 标签意图 — 口语词命中标签（如「健身→减脂」），直接走标签搜索，比语义更准
+  if (!isIngredientList) {
+    var tagIntent = detectTagIntent(msg);
+    if (tagIntent) {
+      results.recipe_search = JSON.parse(await executeSearchRecipes({ tags: tagIntent, max_results: 4 }));
+      return results;
+    }
+  }
+
+  // 3. 语义优先 — 非食材列表 + 模型就绪 → 用原始消息做语义检索（能懂「早上吃什么→早餐」）
+  if (!isIngredientList && window.__semantic && window.__semantic.isReady()) {
+    try {
+      var sem = await window.__semantic.search(msg, 4);
+      if (sem && sem.length > 0) {
+        // 得分阈值：bge 归一化后，相关文档 ~0.4+，无关 ~0.2-0.3。
+        // 最高分太低 = 「没真匹配上」（低分蒙对），降级关键词兜底，
+        // 避免「问天气也硬推菜谱」这种答非所问。
+        var SEM_MIN_SCORE = 0.35;
+        if (sem[0].score < SEM_MIN_SCORE) {
+          console.log('[语义搜索] 最高分 ' + sem[0].score.toFixed(3) + ' 低于阈值 ' + SEM_MIN_SCORE + '，降级关键词兜底');
+        } else {
+          var semRecipes = sem
+            .map(function(s) { return buildRecipeSummary(window.recipes[s.id]); })
+            .filter(function(r) { return r && r.name; });
+          if (semRecipes.length > 0) {
+            results.recipe_search = { found: semRecipes.length, keyword: msg, semantic: true, recipes: semRecipes };
+            return results;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[语义搜索] 预搜索失败，回退关键词:', e.message);
+    }
+  }
+
+  // 4. 关键词兜底 — 用常见食物词匹配
   var keywords = [];
   var foodWords = ['辣', '鸡', '鱼', '肉', '虾', '牛', '猪', '蛋', '豆腐', '面', '饭', '汤',
     '减脂', '川菜', '粤菜', '鲁菜', '下饭', '早餐', '凉菜', '海鲜', '素', '快手', '煲', '蒸', '炒', '炖',
@@ -538,14 +655,14 @@ function preSearch(userMessage) {
   }
 
   if (keywords.length > 0) {
-    results.recipe_search = JSON.parse(executeSearchRecipes({
+    results.recipe_search = JSON.parse(await executeSearchRecipes({
       keyword: keywords[0],
       max_results: 4
     }));
   } else if (!results.ingredient_match) {
     // 没关键词也不是食材列表，搜全部看标签匹配
     // 尝试用整个消息做关键词
-    results.recipe_search = JSON.parse(executeSearchRecipes({
+    results.recipe_search = JSON.parse(await executeSearchRecipes({
       keyword: msg.slice(0, 10),
       max_results: 4
     }));
@@ -582,12 +699,32 @@ function injectPreSearchResults(systemPrompt, preResults) {
   return systemPrompt + extra;
 }
 
+// 从预搜索结果里提取结构化推荐菜谱 id（供前端渲染可点击卡片，不靠文本匹配）
+function collectRecommendationIds(preResults) {
+  var ids = [];
+  var seen = {};
+  var push = function(list) {
+    if (!list) return;
+    for (var i = 0; i < list.length; i++) {
+      var id = list[i].id;
+      if (id && !seen[id]) { seen[id] = true; ids.push(id); }
+    }
+  };
+  if (preResults.recipe_search && preResults.recipe_search.recipes) {
+    push(preResults.recipe_search.recipes);
+  }
+  if (preResults.ingredient_match && preResults.ingredient_match.recommendations) {
+    push(preResults.ingredient_match.recommendations);
+  }
+  return ids;
+}
+
 async function cookingAgent(mode, userMessage, context) {
   try {
     // 通用模式：预搜索 + 单轮 Agent（大幅加速）
     if (mode === 'general') {
       try {
-        var preResults = preSearch(userMessage);
+        var preResults = await preSearch(userMessage);
         var systemPrompt = buildAgentSystemPrompt(mode, context);
         systemPrompt = injectPreSearchResults(systemPrompt, preResults);
 
@@ -596,7 +733,8 @@ async function cookingAgent(mode, userMessage, context) {
 
         if (hasResults) {
           console.log('[Agent] 预搜索命中，单轮响应');
-          return await singleRoundAI(systemPrompt, userMessage);
+          var reply = await singleRoundAI(systemPrompt, userMessage);
+          return { reply: reply, recipeIds: collectRecommendationIds(preResults) };
         }
       } catch (preErr) {
         // 预搜索失败 → 降级为标准 Agent 循环
@@ -604,7 +742,7 @@ async function cookingAgent(mode, userMessage, context) {
       }
     }
 
-    // 标准 Agent 循环
+    // 标准 Agent 循环（agentLoop 现在也会带出工具检索到的菜谱 id）
     return await agentLoop(mode, userMessage, context || {});
   } catch (e) {
     throw e;

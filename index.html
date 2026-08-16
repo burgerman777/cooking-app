@@ -702,7 +702,13 @@
     border-radius: 10px; font-size: 13px; display: none; cursor: pointer;
   }
   .ai-recommend-result.show { display: block; }
-  .ai-recommend-result .rec-dish { font-weight: 700; color: var(--orange-dark); font-size: 15px; }
+  .ai-recommend-result .rec-dish-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .ai-recommend-result .rec-dish {
+    font-weight: 700; color: var(--orange-dark); font-size: 14px;
+    padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 10px;
+    background: var(--card); cursor: pointer;
+  }
+  .ai-recommend-result .rec-dish:active { border-color: var(--orange); transform: scale(0.97); }
   .ai-recommend-result .rec-reason { color: var(--text-muted); margin-top: 2px; }
   .ai-recommend-result .rec-hint { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
 
@@ -1131,6 +1137,7 @@
 </div>
 
 <script src="recipes.js"></script>
+<script src="semantic-search.js"></script>
 <script src="agent.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js" onerror="window._lzstringFailed=true"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="window._qrcodeFailed=true"></script>
@@ -1369,6 +1376,8 @@ function toggleChat() {
     overlay.classList.add('show');
     updateChatContext();
     document.getElementById('ai-chat-input').focus();
+    // 懒加载语义搜索模型（后台下载 23MB，不阻塞聊天；未就绪前走关键词兜底）
+    if (window.__semantic) window.__semantic.init();
   } else {
     panel.classList.remove('open');
     overlay.classList.remove('show');
@@ -1463,9 +1472,9 @@ async function sendMessage() {
     // ── Agent 升级：用 cookingAgent 替代单次 callAI ──
     var context = currentRecipe ? { recipe: currentRecipe, step: cookingStep } : {};
     var mode = currentRecipe ? 'chat' : 'general';
-    var reply = await cookingAgent(mode, text, context);
+    var res = await cookingAgent(mode, text, context);
     hideTyping();
-    addChatMsg('assistant', reply);
+    addChatMsg('assistant', res.reply);
   } catch (e) {
     hideTyping();
     var errMsg = '';
@@ -1485,6 +1494,44 @@ async function sendMessage() {
 // ==================== AI 推荐 ====================
 var recommendedRecipeId = null;
 
+// 取菜名核心（去掉「（...）」括号后缀，如「蒸水蛋（鸡蛋羹）」→「蒸水蛋」），用于匹配 AI 写的短名
+function coreName(name) {
+  var m = (name || '').match(/^[^（(]+/);
+  return m ? m[0] : (name || '');
+}
+
+// 从 AI 回复文本里提取提到的所有菜谱 id（完整名 + 核心名匹配，长名优先避免子串误命中）
+function extractRecommendedIds(reply) {
+  var allIds = Object.keys(recipes);
+  var byCoreDesc = allIds.slice().sort(function(a, b) {
+    return coreName(recipes[b].name).length - coreName(recipes[a].name).length;
+  });
+  var ids = [];
+  var usedCores = [];
+  for (var i = 0; i < byCoreDesc.length; i++) {
+    var id = byCoreDesc[i];
+    var r = recipes[id];
+    if (!r || !r.name) continue;
+    var core = coreName(r.name);
+    // 完整名或核心名出现在回复里才算命中（覆盖 AI 写短名的情况）
+    var hit = reply.indexOf(r.name) !== -1 || (core.length >= 2 && reply.indexOf(core) !== -1);
+    if (!hit) continue;
+    // 去重：核心名是已选核心名的子串则跳过（避免「蛋炒饭」和「蛋炒饭（黄金版）」重复）
+    var covered = false;
+    for (var j = 0; j < usedCores.length; j++) {
+      if (usedCores[j].indexOf(core) !== -1) { covered = true; break; }
+    }
+    if (covered) continue;
+    usedCores.push(core);
+    ids.push(id);
+  }
+  // 按在回复里出现的先后排序（体现 AI 的推荐顺序）
+  ids.sort(function(a, b) {
+    return reply.indexOf(coreName(recipes[a].name)) - reply.indexOf(coreName(recipes[b].name));
+  });
+  return ids;
+}
+
 // buildRecommendContext 已删除 — Agent 用 find_by_ingredients 工具替代，不再把所有菜谱塞进 prompt
 
 async function getAiRecommendation() {
@@ -1503,27 +1550,29 @@ async function getAiRecommendation() {
   try {
     // ── Agent 升级：Agent 自己判断意图，搜菜谱或匹配食材 ──
     // 不再假设用户一定在说冰箱食材，让 Agent 自己判断
-    var reply = await cookingAgent('general', text);
+    var res = await cookingAgent('general', text);
+    var reply = res.reply;
 
-    // 尝试从回复中匹配菜谱名，用于"点击开始做"功能
-    var matchedId = null;
-    var allIds = Object.keys(recipes);
-    for (var i = 0; i < allIds.length; i++) {
-      var r = recipes[allIds[i]];
-      if (r && reply.indexOf(r.name) !== -1) {
-        matchedId = allIds[i];
-        break;
+    // 优先用结构化 id（语义/食材检索的真实结果，不靠文本匹配），文本匹配只做兜底
+    var matchedIds = (res.recipeIds && res.recipeIds.length > 0 ? res.recipeIds : extractRecommendedIds(reply))
+      .filter(function(id) { return recipes[id]; });
+
+    if (matchedIds.length > 0) {
+      var cardsHtml = '';
+      for (var c = 0; c < matchedIds.length && c < 5; c++) {
+        var mid = matchedIds[c];
+        cardsHtml += '<div class="rec-dish" data-recipe="' + mid + '">' +
+          (recipes[mid].emoji || '🍳') + ' ' + escHtml(recipes[mid].name) + '</div>';
       }
-    }
-
-    if (matchedId) {
-      recommendedRecipeId = matchedId;
-      resultDiv.innerHTML = '<div class="rec-dish">' + recipes[matchedId].emoji + ' ' + escHtml(recipes[matchedId].name) + '</div>' +
+      resultDiv.innerHTML =
+        '<div class="rec-dish-list">' + cardsHtml + '</div>' +
         '<div class="rec-reason">' + reply.replace(/\n/g, '<br>') + '</div>' +
-        '<div class="rec-hint">👆 点击直接开始做这道菜</div>';
+        '<div class="rec-hint">' + (matchedIds.length > 1 ? '👆 点任意一道菜开始做' : '👆 点击直接开始做这道菜') + '</div>';
       resultDiv.classList.add('show');
-      resultDiv.style.cursor = 'pointer';
-      resultDiv.onclick = goToRecommended;
+      resultDiv.onclick = function(e) {
+        var card = e.target && e.target.closest ? e.target.closest('.rec-dish') : null;
+        if (card && card.dataset.recipe) goToRecipe(card.dataset.recipe);
+      };
     } else {
       recommendedRecipeId = null;
       resultDiv.innerHTML = '<div class="rec-reason">' + reply.replace(/\n/g, '<br>') + '</div>';
@@ -1546,12 +1595,16 @@ async function getAiRecommendation() {
   btn.textContent = '🤖 推荐';
 }
 
-function goToRecommended() {
-  if (!recommendedRecipeId || !recipes[recommendedRecipeId]) return;
-  currentRecipeId = recommendedRecipeId;
-  currentRecipe = recipes[recommendedRecipeId];
+function goToRecipe(id) {
+  if (!id || !recipes[id]) return;
+  currentRecipeId = id;
+  currentRecipe = recipes[id];
   renderPrep();
   goScreen('prep');
+}
+
+function goToRecommended() {
+  goToRecipe(recommendedRecipeId);
 }
 
 // ==================== 初始化 API Key ====================

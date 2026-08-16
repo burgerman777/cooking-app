@@ -2,12 +2,15 @@
 // 缓存策略：安装时预缓存核心文件，运行时网络优先、缓存兜底
 // ⚠️ 每次部署时更新 CACHE_VERSION，强制所有客户端刷新缓存
 
-var CACHE_VERSION = 'v5';
+var CACHE_VERSION = 'v6';
 var CACHE_NAME = 'zhangchu-' + CACHE_VERSION;
 var PRE_CACHE = [
   '.',
   'index.html',
   'recipes.js',
+  'agent.js',
+  'semantic-search.js',
+  'data/recipe-vectors.json',
   'manifest.json'
 ];
 
@@ -65,6 +68,20 @@ self.addEventListener('fetch', function(e) {
         return fetchPromise.then(function(resp) {
           return resp || new Response('CDN 不可用', { status: 503 });
         });
+      })
+    );
+    return;
+  }
+
+  // 语义模型文件（~24MB）：大文件下载会超过 3 秒，走单独的网络优先、无超时兜底
+  if (e.request.url.indexOf('/models/') !== -1) {
+    e.respondWith(
+      fetch(e.request).then(function(resp) {
+        var clone = resp.clone();
+        caches.open(CACHE_NAME).then(function(c) { c.put(e.request, clone); });
+        return resp;
+      }).catch(function() {
+        return caches.match(e.request);
       })
     );
     return;
