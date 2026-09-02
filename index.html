@@ -1171,10 +1171,14 @@ function loadRecipes() {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Object.keys(parsed).length > 0) {
-        // 从 DEFAULT_RECIPES 合并 tags 等新增字段到已有菜谱
+        // 补齐 DEFAULT_RECIPES 中缺失的默认菜谱 + 合并 tags 等新增字段到已有菜谱
         var updated = false;
-        Object.keys(parsed).forEach(function(id) {
-          if (DEFAULT_RECIPES[id] && DEFAULT_RECIPES[id].tags && !parsed[id].tags) {
+        Object.keys(DEFAULT_RECIPES).forEach(function(id) {
+          if (!parsed[id]) {
+            // 默认菜谱里新增、但缓存里没有的菜谱 → 补进来
+            parsed[id] = JSON.parse(JSON.stringify(DEFAULT_RECIPES[id]));
+            updated = true;
+          } else if (DEFAULT_RECIPES[id].tags && !parsed[id].tags) {
             parsed[id].tags = DEFAULT_RECIPES[id].tags.slice();
             updated = true;
           }
